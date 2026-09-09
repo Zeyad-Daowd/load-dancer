@@ -14,6 +14,10 @@ type RoundRobin struct {
 
 func (rr *RoundRobin) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if len(rr.servers) == 0 {
+			http.Error(w, "No backend servers available", http.StatusServiceUnavailable)
+			return
+		}
 		rr.mutex.Lock()
 		currentServer := rr.current
 		rr.current = (rr.current + 1) % len(rr.servers)
