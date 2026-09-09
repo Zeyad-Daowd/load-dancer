@@ -122,3 +122,161 @@ func TestRoundRobinHandlerNoServers(t *testing.T) {
 	}
 
 }
+
+func TestRoundRobinHandlerSkipsUnhealthyServer(t *testing.T) {
+	responses := []string{
+		"Response from backend 1",
+		"Response from backend 2",
+		"Response from backend 3",
+	}
+
+	servers := []*BackendServer{}
+
+	for _, response := range responses {
+		backend := createMockBackendServer(response)
+		defer backend.Close()
+
+		server, err := CreateBackendServer(backend.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		servers = append(servers, server)
+	}
+
+	// Backend 2 is unhealthy.
+	servers[1].SetHealth(false)
+
+	rr := NewRoundRobin(servers)
+	handler := rr.Handler()
+
+	expectedResponses := []string{
+		responses[0],
+		responses[2],
+		responses[0],
+		responses[2],
+		responses[0],
+		responses[2],
+	}
+
+	for i, expected := range expectedResponses {
+		req := httptest.NewRequest("GET", "/", nil)
+		w := httptest.NewRecorder()
+
+		handler(w, req)
+
+		if got := w.Body.String(); got != expected {
+			t.Errorf("request %d: expected %q, got %q", i, expected, got)
+		}
+	}
+}
+
+func TestRoundRobinHandlerAllServersUnhealthy(t *testing.T) {
+	responses := []string{
+		"Response from backend 1",
+		"Response from backend 2",
+		"Response from backend 3",
+	}
+
+	servers := []*BackendServer{}
+
+	for _, response := range responses {
+		backend := createMockBackendServer(response)
+		defer backend.Close()
+
+		server, err := CreateBackendServer(backend.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		servers = append(servers, server)
+	}
+
+	// Mark every backend as unhealthy.
+	for _, server := range servers {
+		server.SetHealth(false)
+	}
+
+	rr := NewRoundRobin(servers)
+	handler := rr.Handler()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, w.Code)
+	}
+}
+
+func TestRoundRobinHandlerRecoveredServer(t *testing.T) {
+	responses := []string{
+		"Response from backend 1",
+		"Response from backend 2",
+		"Response from backend 3",
+	}
+
+	servers := []*BackendServer{}
+
+	for _, response := range responses {
+		backend := createMockBackendServer(response)
+		defer backend.Close()
+
+		server, err := CreateBackendServer(backend.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		servers = append(servers, server)
+	}
+
+	// Backend 2 starts unhealthy.
+	servers[1].SetHealth(false)
+
+	rr := NewRoundRobin(servers)
+	handler := rr.Handler()
+
+	// Backend 2 should be skipped.
+	expectedResponses := []string{
+		responses[0],
+		responses[2],
+		responses[0],
+		responses[2],
+	}
+
+	for i, expected := range expectedResponses {
+		req := httptest.NewRequest("GET", "/", nil)
+		w := httptest.NewRecorder()
+
+		handler(w, req)
+
+		if got := w.Body.String(); got != expected {
+			t.Errorf("before recovery, request %d: expected %q, got %q", i, expected, got)
+		}
+	}
+
+	// Backend 2 recovers.
+	servers[1].SetHealth(true)
+
+	// Now all three should participate again.
+	expectedResponses = []string{
+		responses[0],
+		responses[1],
+		responses[2],
+		responses[0],
+		responses[1],
+		responses[2],
+	}
+
+	for i, expected := range expectedResponses {
+		req := httptest.NewRequest("GET", "/", nil)
+		w := httptest.NewRecorder()
+
+		handler(w, req)
+
+		if got := w.Body.String(); got != expected {
+			t.Errorf("after recovery, request %d: expected %q, got %q", i, expected, got)
+		}
+	}
+}
