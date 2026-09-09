@@ -4,11 +4,13 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync/atomic"
 )
 
 type BackendServer struct {
-	addr  *url.URL
-	proxy *httputil.ReverseProxy
+	addr   *url.URL
+	proxy  *httputil.ReverseProxy
+	health atomic.Bool
 }
 
 func CreateBackendServer(urlStr string) (*BackendServer, error) {
@@ -18,9 +20,29 @@ func CreateBackendServer(urlStr string) (*BackendServer, error) {
 	}
 	// reverse proxy to forward requests
 	proxy := httputil.NewSingleHostReverseProxy(parsedURL)
-	return &BackendServer{addr: parsedURL, proxy: proxy}, nil
+	server := &BackendServer{addr: parsedURL, proxy: proxy}
+	server.health.Store(true)
+	return server, nil
 }
 
 func (b *BackendServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b.proxy.ServeHTTP(w, r)
+}
+
+func (b *BackendServer) IsHealthy() bool {
+	return b.health.Load()
+}
+
+func (b *BackendServer) SetHealth(healthy bool) {
+	b.health.Store(healthy)
+}
+
+func getAliveServersCount(servers []*BackendServer) int {
+	count := 0
+	for _, server := range servers {
+		if server.IsHealthy() {
+			count++
+		}
+	}
+	return count
 }

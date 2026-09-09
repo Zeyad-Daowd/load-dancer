@@ -18,6 +18,12 @@ func (s *Server) Handler() http.HandlerFunc {
 		w.Write([]byte("Hello from backend server: " + s.addr.String() + "\n"))
 	}
 }
+func (s *Server) HealthHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Got health check to backend server:", s.addr.String())
+		w.WriteHeader(http.StatusOK)
+	}
+}
 func main() {
 	// parse backend urls from command line arguments
 	if len(os.Args) < 2 {
@@ -30,6 +36,7 @@ func main() {
 	}
 	server := &Server{addr: parsedURL}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", server.HealthHandler())
 	mux.HandleFunc("GET /", server.Handler())
 	srv := &http.Server{
 		Addr:              parsedURL.Host,

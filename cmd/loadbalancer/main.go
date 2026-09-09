@@ -19,6 +19,7 @@ func main() {
 		servers = append(servers, server)
 	}
 	mux := http.NewServeMux()
+	go balancer.HealthCheck(servers, 1*time.Second) // check health every 1 second
 	rr := balancer.NewRoundRobin(servers)
 	mux.HandleFunc("GET /", rr.Handler())
 
