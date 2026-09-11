@@ -10,6 +10,7 @@ import (
 	"time"
 
 	balancer "github.com/zeyad-daowd/load-dancer/internal/balancer"
+	"github.com/zeyad-daowd/load-dancer/internal/middleware"
 )
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 	mux := http.NewServeMux()
 	go balancer.HealthCheck(ctx, servers, 1*time.Second) // check health every 1 second
 	rr := balancer.NewRoundRobin(servers)
-	mux.HandleFunc("GET /", rr.Handler())
+	mux.Handle("GET /", middleware.LoggingMiddleware(rr.Handler()))
 
 	srv := &http.Server{
 		Addr:              ":8080",
