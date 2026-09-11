@@ -1,19 +1,23 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 )
 
 type Server struct {
-	addr *url.URL
+	addr  *url.URL
+	delay bool
 }
 
 func (s *Server) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if s.delay {
+			time.Sleep(3 * time.Second)
+		}
 		log.Println("Got request to backend server:", s.addr.String())
 		w.Write([]byte("Hello from backend server: " + s.addr.String() + "\n"))
 	}
@@ -25,16 +29,18 @@ func (s *Server) HealthHandler() http.HandlerFunc {
 	}
 }
 func main() {
-	// parse backend urls from command line arguments
-	if len(os.Args) < 2 {
+	// check if -delay flag is provided
+	delayFlag := flag.Bool("delay", false, "simulate a slow backend with a 3s delay")
+	flag.Parse()
+	if flag.NArg() < 1 {
 		log.Fatal("Please provide at backend URL as a command line argument.")
 	}
-	urlString := os.Args[1]
+	urlString := flag.Arg(0)
 	parsedURL, err := url.Parse(urlString)
 	if err != nil {
 		log.Fatalf("Error parsing backend URL: %v", err)
 	}
-	server := &Server{addr: parsedURL}
+	server := &Server{addr: parsedURL, delay: *delayFlag}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.HealthHandler())
 	mux.HandleFunc("GET /", server.Handler())
