@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	balancer "github.com/zeyad-daowd/load-dancer/internal/balancer"
@@ -10,6 +14,8 @@ import (
 
 func main() {
 	//TODO: make backends register for load balancing
+	sigtermCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	servers := []*balancer.BackendServer{}
 	for _, urlStr := range []string{"http://localhost:8001", "http://localhost:8002", "http://localhost:8003"} {
 		server, err := balancer.CreateBackendServer(urlStr)
@@ -18,8 +24,10 @@ func main() {
 		}
 		servers = append(servers, server)
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	mux := http.NewServeMux()
-	go balancer.HealthCheck(servers, 1*time.Second) // check health every 1 second
+	go balancer.HealthCheck(ctx, servers, 1*time.Second) // check health every 1 second
 	rr := balancer.NewRoundRobin(servers)
 	mux.HandleFunc("GET /", rr.Handler())
 
@@ -32,5 +40,22 @@ func main() {
 		IdleTimeout:       120 * time.Second, // how long a keep-alive connection may sit idle
 	}
 
-	log.Fatal(srv.ListenAndServe())
+	go func() {
+		err := srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("ListenAndServe(): %v", err)
+		}
+	}()
+	<-sigtermCtx.Done()
+	log.Println("shutdown signal received")
+	// for requests
+	cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	// gracefully shutdown the server giving it 10 seconds to finish ongoing requests
+	err := srv.Shutdown(shutdownCtx)
+	if err != nil {
+		log.Printf("shutdown error: %v", err)
+	}
+
 }

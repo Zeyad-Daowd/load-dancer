@@ -1,7 +1,10 @@
 package balancer
 
 import (
+	"context"
+	"log"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -32,22 +35,31 @@ func checkServerHealth(client *http.Client, s *BackendServer, failures int) int 
 	}
 	return failures
 }
-func HealthCheck(servers []*BackendServer, period time.Duration) {
+func HealthCheck(ctx context.Context, servers []*BackendServer, period time.Duration) {
 	client := &http.Client{
 		Timeout: 2 * time.Second,
 	}
+	wg := sync.WaitGroup{}
 	for _, server := range servers {
-		go func(s *BackendServer) {
+		wg.Add(1)
+		go func(ctx context.Context, s *BackendServer) {
+			defer wg.Done()
 			ticker := time.NewTicker(period)
 			failures := 0
 			//initial run
 			failures = checkServerHealth(client, s, failures)
 			defer ticker.Stop()
-			for range ticker.C {
-				failures = checkServerHealth(client, s, failures)
+			for {
+				select {
+				case <-ctx.Done():
+					log.Print("Stopping health check for server: ", s.addr.String())
+					return
+				case <-ticker.C:
+					failures = checkServerHealth(client, s, failures)
+				}
 			}
-		}(server)
+		}(ctx, server)
 	}
-	//TODO: add a mechanism (context) to stop the health check goroutines gracefully when the load balancer shuts down
-	select {}
+	<-ctx.Done()
+	wg.Wait()
 }
