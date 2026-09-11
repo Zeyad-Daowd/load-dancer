@@ -2,7 +2,7 @@ package balancer
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -52,7 +52,7 @@ func HealthCheck(ctx context.Context, servers []*BackendServer, period time.Dura
 			for {
 				select {
 				case <-ctx.Done():
-					log.Print("Stopping health check for server: ", s.addr.String())
+					slog.Info("Stopping health check for server", "url", s.addr.String())
 					return
 				case <-ticker.C:
 					failures = checkServerHealth(client, s, failures)

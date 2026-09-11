@@ -1,7 +1,7 @@
 package balancer
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 )
@@ -33,7 +33,7 @@ func (rr *RoundRobin) Handler() http.HandlerFunc {
 		}
 		rr.current = (currentServer + 1) % len(rr.servers)
 		rr.mutex.Unlock()
-		log.Println("Forwarding request to backend server:", rr.servers[currentServer].addr.String())
+		slog.Info("Forwarding request to backend server", "url", rr.servers[currentServer].addr.String())
 		rr.servers[currentServer].ServeHTTP(w, r)
 	}
 }

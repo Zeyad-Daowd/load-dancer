@@ -2,9 +2,10 @@ package main
 
 import (
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -18,13 +19,13 @@ func (s *Server) Handler() http.HandlerFunc {
 		if s.delay {
 			time.Sleep(3 * time.Second)
 		}
-		log.Println("Got request to backend server:", s.addr.String())
+		slog.Info("Got request to backend server", "url", s.addr.String())
 		w.Write([]byte("Hello from backend server: " + s.addr.String() + "\n"))
 	}
 }
 func (s *Server) HealthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Got health check to backend server:", s.addr.String())
+		slog.Info("Got health check to backend server", "url", s.addr.String())
 		w.WriteHeader(http.StatusOK)
 	}
 }
@@ -33,12 +34,14 @@ func main() {
 	delayFlag := flag.Bool("delay", false, "simulate a slow backend with a 3s delay")
 	flag.Parse()
 	if flag.NArg() < 1 {
-		log.Fatal("Please provide at backend URL as a command line argument.")
+		slog.Error("Please provide a backend URL as a command line argument.")
+		os.Exit(1)
 	}
 	urlString := flag.Arg(0)
 	parsedURL, err := url.Parse(urlString)
 	if err != nil {
-		log.Fatalf("Error parsing backend URL: %v", err)
+		slog.Error("Error parsing backend URL", "error", err)
+		os.Exit(1)
 	}
 	server := &Server{addr: parsedURL, delay: *delayFlag}
 	mux := http.NewServeMux()
@@ -52,6 +55,8 @@ func main() {
 		WriteTimeout:      10 * time.Second,  // time to write the response
 		IdleTimeout:       120 * time.Second, // how long a keep-alive connection may sit idle
 	}
-
-	log.Fatal(srv.ListenAndServe())
+	slog.Info("Starting backend server", "url", parsedURL.String())
+	// TODO: add graceful shutdown
+	slog.Error("Error serving backend server", "error", srv.ListenAndServe())
+	os.Exit(1)
 }

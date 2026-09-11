@@ -1,7 +1,7 @@
 package balancer
 
 import (
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -36,7 +36,7 @@ func CreateBackendServer(urlStr string) (*BackendServer, error) {
 	proxy := httputil.NewSingleHostReverseProxy(parsedURL)
 	proxy.Transport = &transport
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("Error proxying request to backend server %s: %v", parsedURL.String(), err)
+		slog.Error("Error proxying request to backend server", "url", parsedURL.String(), "error", err)
 		http.Error(w, "backend unavailable", http.StatusBadGateway)
 	}
 	server := &BackendServer{addr: parsedURL, proxy: proxy}
