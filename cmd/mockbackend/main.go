@@ -17,7 +17,7 @@ type Server struct {
 func (s *Server) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.delay {
-			time.Sleep(3 * time.Second)
+			time.Sleep(30 * time.Second)
 		}
 		slog.Info("Got request to backend server", "url", s.addr.String())
 		w.Write([]byte("Hello from backend server: " + s.addr.String() + "\n"))
