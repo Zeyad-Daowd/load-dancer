@@ -4,6 +4,14 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+
+	middleware "github.com/zeyad-daowd/load-dancer/internal/middleware"
+)
+
+type contextKey string
+
+const (
+	BackendServerKey contextKey = "backendServerKey"
 )
 
 type RoundRobin struct {
@@ -33,7 +41,7 @@ func (rr *RoundRobin) Handler() http.HandlerFunc {
 		}
 		rr.current = (currentServer + 1) % len(rr.servers)
 		rr.mutex.Unlock()
-		slog.Info("Forwarding request to backend server", "url", rr.servers[currentServer].addr.String())
+		slog.Info("Forwarding request to backend server", "url", rr.servers[currentServer].addr.String(), "requestId", middleware.GetRequestId(r.Context()))
 		rr.servers[currentServer].ServeHTTP(w, r)
 	}
 }
