@@ -68,6 +68,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 	cb.failureCount++
 	if cb.failureCount >= cb.failureThreshold {
 		cb.state = Open
+		cb.halfOpenSent = false
 		cb.openingTime = time.Now()
 	}
 }
