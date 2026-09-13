@@ -1,11 +1,12 @@
 package balancer
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/httputil"
 	"sync"
-
-	middleware "github.com/zeyad-daowd/load-dancer/internal/middleware"
 )
 
 type contextKey string
@@ -19,6 +20,7 @@ type RoundRobin struct {
 	mutex          sync.Mutex
 	current        int
 	retryTransport *RetryBalancerTransport
+	proxy          *httputil.ReverseProxy
 }
 
 func (rr *RoundRobin) selectServer() int {
@@ -26,11 +28,11 @@ func (rr *RoundRobin) selectServer() int {
 	currentServer := rr.current
 	maxAttempts := len(rr.servers)
 	attempts := 0
-	for rr.servers[currentServer].IsHealthy() == false && attempts < maxAttempts {
+	for (rr.servers[currentServer].IsHealthy() == false || rr.servers[currentServer].IsAvailable() == false) && attempts < maxAttempts {
 		currentServer = (currentServer + 1) % len(rr.servers)
 		attempts++
 	}
-	if rr.servers[currentServer].IsHealthy() == false {
+	if rr.servers[currentServer].IsHealthy() == false || rr.servers[currentServer].IsAvailable() == false {
 		rr.mutex.Unlock()
 		return -1
 	}
@@ -44,17 +46,23 @@ func (rr *RoundRobin) Handler() http.HandlerFunc {
 			http.Error(w, "No backend servers available", http.StatusServiceUnavailable)
 			return
 		}
-		currentServer := rr.selectServer()
-		if currentServer == -1 {
-			http.Error(w, "No backend servers available", http.StatusServiceUnavailable)
-			return
-		}
-		slog.Info("Forwarding request to backend server", "url", rr.servers[currentServer].addr.String(), "requestId", middleware.GetRequestId(r.Context()))
-		rr.servers[currentServer].ServeHTTP(w, r)
+		rr.ServeHTTP(w, r)
 	}
 }
 
 func NewRoundRobin(servers []*BackendServer) *RoundRobin {
+	// reverse proxy to forward requests
+	proxy := httputil.ReverseProxy{
+		Director: func(req *http.Request) {},
+	}
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		slog.Error("Error proxying request to backend server", "url", r.URL.String(), "error", err, "errorType", fmt.Sprintf("%T", err))
+		if errors.Is(err, ErrNoHealthyBackends) {
+			http.Error(w, "No healthy backend servers available", http.StatusServiceUnavailable)
+		} else {
+			http.Error(w, "backend unavailable", http.StatusBadGateway)
+		}
+	}
 	rr := &RoundRobin{
 		servers: servers,
 		current: 0,
@@ -64,11 +72,13 @@ func NewRoundRobin(servers []*BackendServer) *RoundRobin {
 			Balancer:      nil,
 			BaseTransport: &baseTransport,
 		},
+		proxy: &proxy,
 	}
 	rr.retryTransport.Balancer = rr
-
-	for _, server := range servers {
-		server.proxy.Transport = rr.retryTransport
-	}
+	rr.proxy.Transport = rr.retryTransport
 	return rr
+}
+
+func (rr *RoundRobin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rr.proxy.ServeHTTP(w, r)
 }

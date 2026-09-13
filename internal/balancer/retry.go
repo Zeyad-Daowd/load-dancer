@@ -2,13 +2,16 @@ package balancer
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"math/rand"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/zeyad-daowd/load-dancer/internal/middleware"
 )
+
+var ErrNoHealthyBackends = errors.New("no healthy backend servers available")
 
 var baseTransport = http.Transport{
 	DialContext: (&net.Dialer{
@@ -32,29 +35,37 @@ func (t *RetryBalancerTransport) RoundTrip(req *http.Request) (*http.Response, e
 	var err error
 
 	for attempt := 0; attempt < t.MaxAttempts; attempt++ {
+
+		nextIdx := t.Balancer.selectServer()
+		if nextIdx == -1 {
+			// No healthy backend servers available
+			slog.Error("No healthy backend servers available", "requestId", middleware.GetRequestId(req.Context()))
+			return nil, ErrNoHealthyBackends
+		}
+
+		nextServer := t.Balancer.servers[nextIdx]
+
+		// route to next server
+		req.URL.Scheme = nextServer.addr.Scheme // http or https
+		req.URL.Host = nextServer.addr.Host     // update the host in the request URL
+		req.Host = nextServer.addr.Host         // update the Host header in the request
+
 		if attempt > 0 {
-			nextIdx := t.Balancer.selectServer()
-			if nextIdx == -1 {
-				return nil, fmt.Errorf("retry failed: no healthy backend servers available")
-			}
-
-			nextServer := t.Balancer.servers[nextIdx]
-
-			// route to next server
-			req.URL.Scheme = nextServer.addr.Scheme // http or https
-			req.URL.Host = nextServer.addr.Host     // update the host in the request URL
-			req.Host = nextServer.addr.Host         // update the Host header in the request
-
 			slog.Info("Retrying request on alternative backend",
 				"url", nextServer.addr.String(),
 				"attempt", attempt,
 			)
+		} else {
+			slog.Info("Forwarding request to backend server", "url", nextServer.addr.String(), "requestId", middleware.GetRequestId(req.Context()))
 		}
 
 		resp, err = t.BaseTransport.RoundTrip(req)
 
 		if !t.shouldRetry(err, req) {
+			t.Balancer.servers[nextIdx].circuitBreaker.RecordSuccess()
 			return resp, err
+		} else {
+			t.Balancer.servers[nextIdx].circuitBreaker.RecordFailure()
 		}
 
 		if attempt < t.MaxAttempts-1 {

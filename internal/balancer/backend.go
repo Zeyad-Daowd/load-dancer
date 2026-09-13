@@ -1,18 +1,14 @@
 package balancer
 
 import (
-	"fmt"
-	"log/slog"
-	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
 )
 
 type BackendServer struct {
-	addr   *url.URL
-	proxy  *httputil.ReverseProxy
-	health atomic.Bool
+	addr           *url.URL
+	health         atomic.Bool
+	circuitBreaker *CircuitBreaker
 }
 
 func CreateBackendServer(urlStr string) (*BackendServer, error) {
@@ -20,19 +16,10 @@ func CreateBackendServer(urlStr string) (*BackendServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	// reverse proxy to forward requests
-	proxy := httputil.NewSingleHostReverseProxy(parsedURL)
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		slog.Error("Error proxying request to backend server", "url", parsedURL.String(), "error", err, "errorType", fmt.Sprintf("%T", err))
-		http.Error(w, "backend unavailable", http.StatusBadGateway)
-	}
-	server := &BackendServer{addr: parsedURL, proxy: proxy}
+	cb := NewCircuitBreaker(3, 5)
+	server := &BackendServer{addr: parsedURL, circuitBreaker: cb}
 	server.health.Store(true)
 	return server, nil
-}
-
-func (b *BackendServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	b.proxy.ServeHTTP(w, r)
 }
 
 func (b *BackendServer) IsHealthy() bool {
@@ -51,4 +38,8 @@ func getAliveServersCount(servers []*BackendServer) int {
 		}
 	}
 	return count
+}
+
+func (b *BackendServer) IsAvailable() bool {
+	return b.circuitBreaker.AllowRequest()
 }
