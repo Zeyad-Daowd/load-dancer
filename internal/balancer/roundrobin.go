@@ -15,9 +15,10 @@ const (
 )
 
 type RoundRobin struct {
-	servers []*BackendServer
-	mutex   sync.Mutex
-	current int
+	servers        []*BackendServer
+	mutex          sync.Mutex
+	current        int
+	retryTransport *RetryBalancerTransport
 }
 
 func (rr *RoundRobin) selectServer() int {
@@ -54,9 +55,20 @@ func (rr *RoundRobin) Handler() http.HandlerFunc {
 }
 
 func NewRoundRobin(servers []*BackendServer) *RoundRobin {
-	return &RoundRobin{
+	rr := &RoundRobin{
 		servers: servers,
 		current: 0,
 		mutex:   sync.Mutex{},
+		retryTransport: &RetryBalancerTransport{
+			MaxAttempts:   3,
+			Balancer:      nil,
+			BaseTransport: &baseTransport,
+		},
 	}
+	rr.retryTransport.Balancer = rr
+
+	for _, server := range servers {
+		server.proxy.Transport = rr.retryTransport
+	}
+	return rr
 }

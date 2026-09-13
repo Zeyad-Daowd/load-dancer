@@ -31,7 +31,6 @@ func main() {
 	mux := http.NewServeMux()
 	go balancer.HealthCheck(ctx, servers, 1*time.Second) // check health every 1 second
 	rr := balancer.NewRoundRobin(servers)
-	balancer.RetryTransport.Balancer = rr
 	mux.Handle("GET /", middleware.LoggingMiddleware(rr.Handler()))
 
 	srv := &http.Server{

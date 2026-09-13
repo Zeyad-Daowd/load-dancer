@@ -3,34 +3,16 @@ package balancer
 import (
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
-	"time"
 )
 
 type BackendServer struct {
 	addr   *url.URL
 	proxy  *httputil.ReverseProxy
 	health atomic.Bool
-}
-
-var baseTransport = http.Transport{
-	DialContext: (&net.Dialer{
-		Timeout:   2 * time.Second,
-		KeepAlive: 10 * time.Second,
-	}).DialContext,
-	ResponseHeaderTimeout: 5 * time.Second,
-	IdleConnTimeout:       10 * time.Second,
-	MaxIdleConns:          100,
-	MaxIdleConnsPerHost:   20,
-}
-var RetryTransport = RetryBalancerTransport{
-	BaseTransport: &baseTransport,
-	MaxAttempts:   3,
-	Balancer:      nil,
 }
 
 func CreateBackendServer(urlStr string) (*BackendServer, error) {
@@ -40,7 +22,6 @@ func CreateBackendServer(urlStr string) (*BackendServer, error) {
 	}
 	// reverse proxy to forward requests
 	proxy := httputil.NewSingleHostReverseProxy(parsedURL)
-	proxy.Transport = &RetryTransport
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		slog.Error("Error proxying request to backend server", "url", parsedURL.String(), "error", err, "errorType", fmt.Sprintf("%T", err))
 		http.Error(w, "backend unavailable", http.StatusBadGateway)

@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+var baseTransport = http.Transport{
+	DialContext: (&net.Dialer{
+		Timeout:   2 * time.Second,
+		KeepAlive: 10 * time.Second,
+	}).DialContext,
+	ResponseHeaderTimeout: 5 * time.Second,
+	IdleConnTimeout:       10 * time.Second,
+	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   20,
+}
+
 type RetryBalancerTransport struct {
 	BaseTransport http.RoundTripper
 	Balancer      *RoundRobin
