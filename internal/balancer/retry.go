@@ -60,8 +60,8 @@ func (t *RetryBalancerTransport) RoundTrip(req *http.Request) (*http.Response, e
 		}
 
 		resp, err = t.BaseTransport.RoundTrip(req)
-
-		if err == nil {
+		// success means the request was successfully sent and a response was received with status code < 500
+		if err == nil && (resp != nil && resp.StatusCode < 500) {
 			t.Balancer.servers[nextIdx].circuitBreaker.RecordSuccess()
 		} else {
 			t.Balancer.servers[nextIdx].circuitBreaker.RecordFailure()
