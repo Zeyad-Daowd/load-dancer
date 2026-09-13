@@ -61,11 +61,14 @@ func (t *RetryBalancerTransport) RoundTrip(req *http.Request) (*http.Response, e
 
 		resp, err = t.BaseTransport.RoundTrip(req)
 
-		if !t.shouldRetry(err, req) {
+		if err == nil {
 			t.Balancer.servers[nextIdx].circuitBreaker.RecordSuccess()
-			return resp, err
 		} else {
 			t.Balancer.servers[nextIdx].circuitBreaker.RecordFailure()
+		}
+
+		if !t.shouldRetry(err, req) {
+			return resp, err
 		}
 
 		if attempt < t.MaxAttempts-1 {

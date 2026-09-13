@@ -32,7 +32,7 @@ func (rr *RoundRobin) selectServer() int {
 		currentServer = (currentServer + 1) % len(rr.servers)
 		attempts++
 	}
-	if rr.servers[currentServer].IsHealthy() == false || rr.servers[currentServer].IsAvailable() == false {
+	if attempts == maxAttempts {
 		rr.mutex.Unlock()
 		return -1
 	}
