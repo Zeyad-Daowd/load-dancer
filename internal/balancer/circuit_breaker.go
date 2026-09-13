@@ -55,12 +55,10 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
 
-	if cb.state == HalfOpen {
-		cb.state = Closed
-		cb.failureCount = 0
-		cb.halfOpenSent = false
-		cb.openingTime = time.Time{}
-	}
+	cb.state = Closed
+	cb.failureCount = 0
+	cb.halfOpenSent = false
+	cb.openingTime = time.Time{}
 }
 
 func (cb *CircuitBreaker) RecordFailure() {
