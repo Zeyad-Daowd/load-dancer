@@ -89,7 +89,7 @@ func attemptDelete(client *http.Client, fullURL string) (success bool, err error
 	}
 
 	resp, err := client.Do(req)
-	if err != nil && resp != nil && resp.StatusCode == http.StatusNotFound {
+	if err == nil && resp != nil && resp.StatusCode == http.StatusNotFound {
 		return true, nil
 	}
 	if err != nil {
@@ -169,6 +169,10 @@ func main() {
 
 	<-sigtermCtx.Done()
 	slog.Info("Shutting down server gracefully...")
+	err = SendServerDeleteRequest(uniqueID, loadBalancerURL)
+	if err != nil {
+		slog.Error("Error sending server delete request", "error", err)
+	}
 	// for requests
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
@@ -178,10 +182,6 @@ func main() {
 		slog.Error("Error shutting down server", "error", err)
 	}
 
-	err = SendServerDeleteRequest(uniqueID, loadBalancerURL)
-	if err != nil {
-		slog.Error("Error sending server delete request", "error", err)
-	}
 	slog.Info("Server Shutdown complete. Server is now offline.")
 
 }
