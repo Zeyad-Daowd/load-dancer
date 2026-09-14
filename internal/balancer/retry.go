@@ -36,14 +36,12 @@ func (t *RetryBalancerTransport) RoundTrip(req *http.Request) (*http.Response, e
 
 	for attempt := 0; attempt < t.MaxAttempts; attempt++ {
 
-		nextIdx := t.Balancer.selectServer()
-		if nextIdx == -1 {
+		nextServer := t.Balancer.selectServer()
+		if nextServer == nil {
 			// No healthy backend servers available
 			slog.Error("No healthy backend servers available", "requestId", middleware.GetRequestId(req.Context()))
 			return nil, ErrNoHealthyBackends
 		}
-
-		nextServer := t.Balancer.servers[nextIdx]
 
 		// route to next server
 		req.URL.Scheme = nextServer.addr.Scheme // http or https
@@ -62,9 +60,9 @@ func (t *RetryBalancerTransport) RoundTrip(req *http.Request) (*http.Response, e
 		resp, err = t.BaseTransport.RoundTrip(req)
 		// success means the request was successfully sent and a response was received with status code < 500
 		if err == nil && (resp != nil && resp.StatusCode < 500) {
-			t.Balancer.servers[nextIdx].circuitBreaker.RecordSuccess()
+			nextServer.circuitBreaker.RecordSuccess()
 		} else {
-			t.Balancer.servers[nextIdx].circuitBreaker.RecordFailure()
+			nextServer.circuitBreaker.RecordFailure()
 		}
 
 		if !t.shouldRetry(err, req) {

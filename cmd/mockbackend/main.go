@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -28,6 +31,36 @@ func (s *Server) HealthHandler() http.HandlerFunc {
 		slog.Info("Got health check to backend server", "url", s.addr.String())
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+type RegisterBackendRequest struct {
+	URL string `json:"url"`
+}
+
+func SendServerRegistrationRequest(serverURL string, controllerURL string) error {
+
+	reqPayload := RegisterBackendRequest{URL: serverURL}
+	requestBody, err := json.Marshal(reqPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal registration request: %w", err)
+	}
+	fullURL := controllerURL + "/backends/register"
+	maxRetries := 5
+	retries := 0
+	// Send the POST request to the controller
+	resp, err := http.Post(fullURL, "application/json", bytes.NewReader(requestBody))
+	for err != nil || resp == nil || (resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusConflict) {
+		slog.Error("Error sending registration request, retrying...", "error", err)
+		time.Sleep(2 * time.Second) // wait for 2 seconds before retrying
+		resp, err = http.Post(fullURL, "application/json", bytes.NewReader(requestBody))
+		retries++
+		if retries >= maxRetries {
+			slog.Error("Failed to register backend server after maximum retries", "serverURL", serverURL, "controllerURL", controllerURL)
+			return fmt.Errorf("failed to register backend server after %d retries", maxRetries)
+		}
+	}
+	slog.Info("Successfully registered backend server", "serverURL", serverURL, "controllerURL", controllerURL)
+	return nil
 }
 func main() {
 	// check if -delay flag is provided
@@ -56,6 +89,7 @@ func main() {
 		IdleTimeout:       120 * time.Second, // how long a keep-alive connection may sit idle
 	}
 	slog.Info("Starting backend server", "url", parsedURL.String())
+	go SendServerRegistrationRequest(parsedURL.String(), "http://localhost:8081")
 	// TODO: add graceful shutdown
 	slog.Error("Error serving backend server", "error", srv.ListenAndServe())
 	os.Exit(1)

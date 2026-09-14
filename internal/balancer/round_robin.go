@@ -1,12 +1,14 @@
 package balancer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"sync"
+	"time"
 )
 
 type contextKey string
@@ -23,8 +25,9 @@ type RoundRobin struct {
 	proxy          *httputil.ReverseProxy
 }
 
-func (rr *RoundRobin) selectServer() int {
+func (rr *RoundRobin) selectServer() *BackendServer {
 	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
 	currentServer := rr.current
 	maxAttempts := len(rr.servers)
 	attempts := 0
@@ -33,16 +36,17 @@ func (rr *RoundRobin) selectServer() int {
 		attempts++
 	}
 	if attempts == maxAttempts {
-		rr.mutex.Unlock()
-		return -1
+		return nil
 	}
 	rr.current = (currentServer + 1) % len(rr.servers)
-	rr.mutex.Unlock()
-	return currentServer
+	return rr.servers[currentServer]
 }
 func (rr *RoundRobin) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if len(rr.servers) == 0 {
+		rr.mutex.Lock()
+		noServers := len(rr.servers) == 0
+		rr.mutex.Unlock()
+		if noServers {
 			http.Error(w, "No backend servers available", http.StatusServiceUnavailable)
 			return
 		}
@@ -81,4 +85,45 @@ func NewRoundRobin(servers []*BackendServer) *RoundRobin {
 
 func (rr *RoundRobin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rr.proxy.ServeHTTP(w, r)
+}
+
+type backendStatus struct {
+	URL       string `json:"url"`
+	Healthy   bool   `json:"healthy"`
+	Available bool   `json:"available"`
+}
+
+func (rr *RoundRobin) GetServers() []backendStatus {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+	backends := make([]backendStatus, len(rr.servers))
+	for i, server := range rr.servers {
+		backends[i] = backendStatus{
+			URL:       server.addr.String(),
+			Healthy:   server.IsHealthy(),
+			Available: server.IsAvailable(),
+		}
+	}
+	return backends
+}
+
+var ErrExistingBackend = errors.New("backend server already exists")
+
+func (rr *RoundRobin) AddServer(urlStr string, healthCheckPeriod time.Duration) error {
+	server, err := CreateBackendServer(urlStr)
+	if err != nil {
+		return err
+	}
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+	for _, existingServer := range rr.servers {
+		if existingServer.addr.String() == server.addr.String() {
+			slog.Warn("Attempted to add a backend server that already exists", "url", urlStr)
+			return ErrExistingBackend
+		}
+	}
+	rr.servers = append(rr.servers, server)
+	go HealthCheck(context.Background(), []*BackendServer{server}, healthCheckPeriod)
+	slog.Info("Added new backend server", "url", urlStr)
+	return nil
 }
