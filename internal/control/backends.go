@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -14,9 +15,10 @@ type BackendController struct {
 	balancer          *balancer.RoundRobin
 	Srv               *http.Server
 	healthCheckPeriod time.Duration
+	ctx               context.Context
 }
 
-func NewBackendController(balancer *balancer.RoundRobin, addr string, healthCheckPeriod time.Duration) *BackendController {
+func NewBackendController(ctx context.Context, balancer *balancer.RoundRobin, addr string, healthCheckPeriod time.Duration) *BackendController {
 	mux := http.NewServeMux()
 
 	srv := &http.Server{
@@ -31,6 +33,7 @@ func NewBackendController(balancer *balancer.RoundRobin, addr string, healthChec
 		balancer:          balancer,
 		healthCheckPeriod: healthCheckPeriod,
 		Srv:               srv,
+		ctx:               ctx,
 	}
 	mux.Handle("GET /backends", controller.getBackendsHandler())
 	mux.Handle("POST /backends/register", controller.addBackendHandler())
@@ -65,7 +68,7 @@ func (bc *BackendController) addBackendHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = bc.balancer.AddServer(req.URL, bc.healthCheckPeriod)
+		err = bc.balancer.AddServer(bc.ctx, req.URL, bc.healthCheckPeriod)
 		if err != nil && errors.Is(err, balancer.ErrExistingBackend) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return

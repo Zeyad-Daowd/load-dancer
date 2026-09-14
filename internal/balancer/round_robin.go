@@ -28,6 +28,9 @@ type RoundRobin struct {
 func (rr *RoundRobin) selectServer() *BackendServer {
 	rr.mutex.Lock()
 	defer rr.mutex.Unlock()
+	if len(rr.servers) == 0 {
+		return nil
+	}
 	currentServer := rr.current
 	maxAttempts := len(rr.servers)
 	attempts := 0
@@ -43,13 +46,6 @@ func (rr *RoundRobin) selectServer() *BackendServer {
 }
 func (rr *RoundRobin) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rr.mutex.Lock()
-		noServers := len(rr.servers) == 0
-		rr.mutex.Unlock()
-		if noServers {
-			http.Error(w, "No backend servers available", http.StatusServiceUnavailable)
-			return
-		}
 		rr.ServeHTTP(w, r)
 	}
 }
@@ -109,7 +105,7 @@ func (rr *RoundRobin) GetServers() []backendStatus {
 
 var ErrExistingBackend = errors.New("backend server already exists")
 
-func (rr *RoundRobin) AddServer(urlStr string, healthCheckPeriod time.Duration) error {
+func (rr *RoundRobin) AddServer(ctx context.Context, urlStr string, healthCheckPeriod time.Duration) error {
 	server, err := CreateBackendServer(urlStr)
 	if err != nil {
 		return err
@@ -123,7 +119,7 @@ func (rr *RoundRobin) AddServer(urlStr string, healthCheckPeriod time.Duration) 
 		}
 	}
 	rr.servers = append(rr.servers, server)
-	go HealthCheck(context.Background(), []*BackendServer{server}, healthCheckPeriod)
+	go HealthCheck(ctx, []*BackendServer{server}, healthCheckPeriod)
 	slog.Info("Added new backend server", "url", urlStr)
 	return nil
 }

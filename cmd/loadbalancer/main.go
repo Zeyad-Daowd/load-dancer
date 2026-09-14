@@ -32,7 +32,7 @@ func main() {
 	defer cancel()
 	healthCheckPeriod := 1 * time.Second
 	rr := balancer.NewRoundRobin(servers)
-	controller := control.NewBackendController(rr, ":8081", healthCheckPeriod)
+	controller := control.NewBackendController(ctx, rr, ":8081", healthCheckPeriod)
 	go func() {
 		err := controller.Srv.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
@@ -42,7 +42,6 @@ func main() {
 	}()
 
 	mux := http.NewServeMux()
-	go balancer.HealthCheck(ctx, servers, healthCheckPeriod) // check health every 1 second
 	mux.Handle("GET /", middleware.LoggingMiddleware(rr.Handler()))
 
 	srv := &http.Server{

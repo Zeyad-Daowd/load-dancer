@@ -37,6 +37,16 @@ type RegisterBackendRequest struct {
 	URL string `json:"url"`
 }
 
+func attemptRegistration(fullURL string, requestBody []byte) (success bool, err error) {
+	resp, err := http.Post(fullURL, "application/json", bytes.NewReader(requestBody))
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close() // closes as soon as this function returns
+
+	return resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusConflict, nil
+}
+
 func SendServerRegistrationRequest(serverURL string, controllerURL string) error {
 
 	reqPayload := RegisterBackendRequest{URL: serverURL}
@@ -48,19 +58,21 @@ func SendServerRegistrationRequest(serverURL string, controllerURL string) error
 	maxRetries := 5
 	retries := 0
 	// Send the POST request to the controller
-	resp, err := http.Post(fullURL, "application/json", bytes.NewReader(requestBody))
-	for err != nil || resp == nil || (resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusConflict) {
-		slog.Error("Error sending registration request, retrying...", "error", err)
-		time.Sleep(2 * time.Second) // wait for 2 seconds before retrying
-		resp, err = http.Post(fullURL, "application/json", bytes.NewReader(requestBody))
-		retries++
-		if retries >= maxRetries {
-			slog.Error("Failed to register backend server after maximum retries", "serverURL", serverURL, "controllerURL", controllerURL)
-			return fmt.Errorf("failed to register backend server after %d retries", maxRetries)
+	for retries < maxRetries {
+		success, err := attemptRegistration(fullURL, requestBody)
+		if err != nil {
+			slog.Error("Error sending registration request", "error", err)
+		} else if success {
+			slog.Info("Successfully registered backend server", "serverURL", serverURL, "controllerURL", controllerURL)
+			return nil
+		} else {
+			slog.Warn("Failed to register backend server, will retry", "serverURL", serverURL, "controllerURL", controllerURL)
 		}
+		retries++
+		time.Sleep(2 * time.Second) // wait before retrying
 	}
-	slog.Info("Successfully registered backend server", "serverURL", serverURL, "controllerURL", controllerURL)
-	return nil
+	slog.Error("Failed to register backend server breaking out after max attempts", "serverURL", serverURL, "controllerURL", controllerURL)
+	return fmt.Errorf("failed to register backend server after %d attempts", maxRetries)
 }
 func main() {
 	// check if -delay flag is provided
