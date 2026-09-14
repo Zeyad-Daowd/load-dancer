@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	balancer "github.com/zeyad-daowd/load-dancer/internal/balancer"
 )
 
@@ -16,6 +17,11 @@ type BackendController struct {
 	Srv               *http.Server
 	healthCheckPeriod time.Duration
 	ctx               context.Context
+}
+
+type RegisterBackendRequest struct {
+	URL      string    `json:"url"`
+	UniqueID uuid.UUID `json:"uniqueID"`
 }
 
 func NewBackendController(ctx context.Context, balancer *balancer.RoundRobin, addr string, healthCheckPeriod time.Duration) *BackendController {
@@ -37,6 +43,7 @@ func NewBackendController(ctx context.Context, balancer *balancer.RoundRobin, ad
 	}
 	mux.Handle("GET /backends", controller.getBackendsHandler())
 	mux.Handle("POST /backends/register", controller.addBackendHandler())
+	mux.Handle("DELETE /backends/{uniqueID}", controller.deleteBackendHandler())
 
 	return controller
 }
@@ -56,10 +63,6 @@ func (bc *BackendController) getBackendsHandler() http.HandlerFunc {
 	}
 }
 
-type RegisterBackendRequest struct {
-	URL string `json:"url"`
-}
-
 func (bc *BackendController) addBackendHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req RegisterBackendRequest
@@ -68,12 +71,34 @@ func (bc *BackendController) addBackendHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = bc.balancer.AddServer(bc.ctx, req.URL, bc.healthCheckPeriod)
+		err = bc.balancer.AddServer(bc.ctx, req.URL, req.UniqueID, bc.healthCheckPeriod)
 		if err != nil && errors.Is(err, balancer.ErrExistingBackend) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
 		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	}
+}
+
+func (bc *BackendController) deleteBackendHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("uniqueID")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			http.Error(w, "Invalid UUID", http.StatusBadRequest)
+			return
+		}
+		err = bc.balancer.RemoveServer(id)
+		if err != nil && errors.Is(err, balancer.ErrBackendNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			slog.Error("Error removing backend server", "error", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

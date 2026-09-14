@@ -9,6 +9,8 @@ import (
 	"net/http/httputil"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type contextKey string
@@ -18,11 +20,13 @@ const (
 )
 
 type RoundRobin struct {
-	servers        []*BackendServer
-	mutex          sync.Mutex
-	current        int
-	retryTransport *RetryBalancerTransport
-	proxy          *httputil.ReverseProxy
+	servers          []*BackendServer
+	mutex            sync.Mutex
+	current          int
+	retryTransport   *RetryBalancerTransport
+	proxy            *httputil.ReverseProxy
+	serversMap       map[uuid.UUID]*BackendServer
+	serversCancelMap map[uuid.UUID]context.CancelFunc
 }
 
 func (rr *RoundRobin) selectServer() *BackendServer {
@@ -31,7 +35,7 @@ func (rr *RoundRobin) selectServer() *BackendServer {
 	if len(rr.servers) == 0 {
 		return nil
 	}
-	currentServer := rr.current
+	currentServer := rr.current % len(rr.servers)
 	maxAttempts := len(rr.servers)
 	attempts := 0
 	for (rr.servers[currentServer].IsHealthy() == false || rr.servers[currentServer].IsAvailable() == false) && attempts < maxAttempts {
@@ -72,7 +76,9 @@ func NewRoundRobin(servers []*BackendServer) *RoundRobin {
 			Balancer:      nil,
 			BaseTransport: &baseTransport,
 		},
-		proxy: &proxy,
+		proxy:            &proxy,
+		serversMap:       make(map[uuid.UUID]*BackendServer),
+		serversCancelMap: make(map[uuid.UUID]context.CancelFunc),
 	}
 	rr.retryTransport.Balancer = rr
 	rr.proxy.Transport = rr.retryTransport
@@ -105,21 +111,49 @@ func (rr *RoundRobin) GetServers() []backendStatus {
 
 var ErrExistingBackend = errors.New("backend server already exists")
 
-func (rr *RoundRobin) AddServer(ctx context.Context, urlStr string, healthCheckPeriod time.Duration) error {
+func (rr *RoundRobin) AddServer(ctx context.Context, urlStr string, uniqueID uuid.UUID, healthCheckPeriod time.Duration) error {
 	server, err := CreateBackendServer(urlStr)
 	if err != nil {
 		return err
 	}
 	rr.mutex.Lock()
 	defer rr.mutex.Unlock()
-	for _, existingServer := range rr.servers {
-		if existingServer.addr.String() == server.addr.String() {
-			slog.Warn("Attempted to add a backend server that already exists", "url", urlStr)
-			return ErrExistingBackend
+	_, exists := rr.serversMap[uniqueID]
+	if exists {
+		slog.Warn("Attempted to add a backend server that already exists", "url", urlStr, "uniqueID", uniqueID.String())
+		return ErrExistingBackend
+	}
+	rr.serversMap[uniqueID] = server
+	rr.servers = append(rr.servers, server)
+	ctxChild, cancel := context.WithCancel(ctx)
+	rr.serversCancelMap[uniqueID] = cancel
+	go HealthCheck(ctxChild, []*BackendServer{server}, healthCheckPeriod)
+	slog.Info("Added new backend server", "url", urlStr)
+	return nil
+}
+
+var ErrBackendNotFound = errors.New("backend server not found for deletion")
+
+func (rr *RoundRobin) RemoveServer(uniqueID uuid.UUID) error {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+	server, exists := rr.serversMap[uniqueID]
+	if !exists {
+		slog.Warn("Attempted to remove a backend server that does not exist", "uniqueID", uniqueID.String())
+		return ErrBackendNotFound
+	}
+	delete(rr.serversMap, uniqueID)
+	cancelFunc, cancelExists := rr.serversCancelMap[uniqueID]
+	if cancelExists {
+		cancelFunc()
+		delete(rr.serversCancelMap, uniqueID)
+	}
+	for i, s := range rr.servers {
+		if s == server {
+			rr.servers = append(rr.servers[:i], rr.servers[i+1:]...)
+			break
 		}
 	}
-	rr.servers = append(rr.servers, server)
-	go HealthCheck(ctx, []*BackendServer{server}, healthCheckPeriod)
-	slog.Info("Added new backend server", "url", urlStr)
+	slog.Info("Removed backend server", "uniqueID", uniqueID.String())
 	return nil
 }
