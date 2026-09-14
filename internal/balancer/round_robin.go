@@ -90,21 +90,25 @@ func (rr *RoundRobin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type backendStatus struct {
-	URL       string `json:"url"`
-	Healthy   bool   `json:"healthy"`
-	Available bool   `json:"available"`
+	URL       string    `json:"url"`
+	Healthy   bool      `json:"healthy"`
+	Available bool      `json:"available"`
+	Id        uuid.UUID `json:"uniqueID"`
 }
 
 func (rr *RoundRobin) GetServers() []backendStatus {
 	rr.mutex.Lock()
 	defer rr.mutex.Unlock()
 	backends := make([]backendStatus, len(rr.servers))
-	for i, server := range rr.servers {
-		backends[i] = backendStatus{
+	index := 0
+	for id, server := range rr.serversMap {
+		backends[index] = backendStatus{
 			URL:       server.addr.String(),
 			Healthy:   server.IsHealthy(),
 			Available: server.IsAvailable(),
+			Id:        id,
 		}
+		index++
 	}
 	return backends
 }
