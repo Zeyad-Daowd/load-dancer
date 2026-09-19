@@ -70,6 +70,17 @@ Blindly retrying a non-idempotent request such as `POST` can cause duplicate sid
 
 Selected non-idempotent operations could later support retries through mechanisms such as idempotency keys.
 
+## Configuration
+
+The load balancer and backend servers require a shared control-plane secret
+for authenticating requests to the control API.
+
+Create a `.env` file in the project root using the `.env.example` template:
+
+```env
+CONTROL_PLANE_SECRET=your-secret-here
+```
+
 ## Running locally
 
 Start three mock backends:

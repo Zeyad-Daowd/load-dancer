@@ -10,29 +10,31 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	balancer "github.com/zeyad-daowd/load-dancer/internal/balancer"
 	control "github.com/zeyad-daowd/load-dancer/internal/control"
 	"github.com/zeyad-daowd/load-dancer/internal/middleware"
 )
 
 func main() {
-	//TODO: make backends register for load balancing
 	sigtermCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	servers := []*balancer.BackendServer{}
-	// for _, urlStr := range []string{"http://localhost:8001", "http://localhost:8002", "http://localhost:8003"} {
-	// 	server, err := balancer.CreateBackendServer(urlStr)
-	// 	if err != nil {
-	// 		slog.Error("Error creating backend server", "url", urlStr, "error", err)
-	// 	} else {
-	// 		servers = append(servers, server)
-	// 	}
-	// }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	healthCheckPeriod := 1 * time.Second
 	rr := balancer.NewRoundRobin(servers)
-	controller := control.NewBackendController(ctx, rr, ":8081", healthCheckPeriod)
+	err := godotenv.Load(".env")
+	if err != nil {
+		slog.Error("Error loading .env file", "error", err)
+		os.Exit(1)
+	}
+	controlPlaneSecret := os.Getenv("CONTROL_PLANE_SECRET")
+	if controlPlaneSecret == "" {
+		slog.Error("CONTROL_PLANE_SECRET is not set")
+		os.Exit(1)
+	}
+	controller := control.NewBackendController(ctx, rr, ":8081", healthCheckPeriod, controlPlaneSecret)
 	go func() {
 		err := controller.Srv.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {

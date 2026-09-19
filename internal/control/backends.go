@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	balancer "github.com/zeyad-daowd/load-dancer/internal/balancer"
+	middleware "github.com/zeyad-daowd/load-dancer/internal/middleware"
 )
 
 type BackendController struct {
@@ -24,7 +25,7 @@ type RegisterBackendRequest struct {
 	UniqueID uuid.UUID `json:"uniqueID"`
 }
 
-func NewBackendController(ctx context.Context, balancer *balancer.RoundRobin, addr string, healthCheckPeriod time.Duration) *BackendController {
+func NewBackendController(ctx context.Context, balancer *balancer.RoundRobin, addr string, healthCheckPeriod time.Duration, secret string) *BackendController {
 	mux := http.NewServeMux()
 
 	srv := &http.Server{
@@ -41,9 +42,9 @@ func NewBackendController(ctx context.Context, balancer *balancer.RoundRobin, ad
 		Srv:               srv,
 		ctx:               ctx,
 	}
-	mux.Handle("GET /backends", controller.getBackendsHandler())
-	mux.Handle("POST /backends/register", controller.addBackendHandler())
-	mux.Handle("DELETE /backends/{uniqueID}", controller.deleteBackendHandler())
+	mux.Handle("GET /backends", middleware.ValidateAuthorizationHeader(secret)(controller.getBackendsHandler()))
+	mux.Handle("POST /backends/register", middleware.ValidateAuthorizationHeader(secret)(controller.addBackendHandler()))
+	mux.Handle("DELETE /backends/{uniqueID}", middleware.ValidateAuthorizationHeader(secret)(controller.deleteBackendHandler()))
 
 	return controller
 }

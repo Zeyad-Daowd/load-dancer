@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/joho/godotenv"
 )
 
 type Server struct {
@@ -43,8 +44,14 @@ type RegisterBackendRequest struct {
 	UniqueID uuid.UUID `json:"uniqueID"`
 }
 
-func attemptRegistration(fullURL string, requestBody []byte) (success bool, err error) {
-	resp, err := http.Post(fullURL, "application/json", bytes.NewReader(requestBody))
+func attemptRegistration(fullURL string, requestBody []byte, controlPlaneSecret string, client *http.Client) (success bool, err error) {
+	req, err := http.NewRequest("POST", fullURL, bytes.NewReader(requestBody))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+controlPlaneSecret)
+	resp, err := client.Do(req)
 	if err != nil {
 		return false, err
 	}
@@ -53,7 +60,7 @@ func attemptRegistration(fullURL string, requestBody []byte) (success bool, err 
 	return resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusConflict, nil
 }
 
-func SendServerRegistrationRequest(serverURL string, uniqueID uuid.UUID, controllerURL string) error {
+func SendServerRegistrationRequest(serverURL string, uniqueID uuid.UUID, controllerURL string, controlPlaneSecret string) error {
 
 	reqPayload := RegisterBackendRequest{URL: serverURL, UniqueID: uniqueID}
 	requestBody, err := json.Marshal(reqPayload)
@@ -63,9 +70,10 @@ func SendServerRegistrationRequest(serverURL string, uniqueID uuid.UUID, control
 	fullURL := controllerURL + "/backends/register"
 	maxRetries := 5
 	retries := 0
+	client := http.DefaultClient
 	// Send the POST request to the controller
 	for retries < maxRetries {
-		success, err := attemptRegistration(fullURL, requestBody)
+		success, err := attemptRegistration(fullURL, requestBody, controlPlaneSecret, client)
 		if err != nil {
 			slog.Error("Error sending registration request", "error", err)
 		} else if success {
@@ -80,14 +88,14 @@ func SendServerRegistrationRequest(serverURL string, uniqueID uuid.UUID, control
 	slog.Error("Failed to register backend server breaking out after max attempts", "serverURL", serverURL, "controllerURL", controllerURL)
 	return fmt.Errorf("failed to register backend server after %d attempts", maxRetries)
 }
-func attemptDelete(client *http.Client, fullURL string) (success bool, err error) {
+func attemptDelete(client *http.Client, fullURL string, controlPlaneSecret string) (success bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fullURL, nil)
 	if err != nil {
 		return false, err
 	}
-
+	req.Header.Add("Authorization", "Bearer "+controlPlaneSecret)
 	resp, err := client.Do(req)
 	if err == nil && resp != nil && resp.StatusCode == http.StatusNotFound {
 		return true, nil
@@ -100,7 +108,7 @@ func attemptDelete(client *http.Client, fullURL string) (success bool, err error
 	return resp.StatusCode >= 200 && resp.StatusCode < 300, nil
 }
 
-func SendServerDeleteRequest(uniqueID uuid.UUID, controllerURL string) error {
+func SendServerDeleteRequest(uniqueID uuid.UUID, controllerURL string, controlPlaneSecret string) error {
 	fullURL, err := url.JoinPath(controllerURL, "backends", uniqueID.String())
 	if err != nil {
 		return fmt.Errorf("invalid URL: %w", err)
@@ -111,7 +119,7 @@ func SendServerDeleteRequest(uniqueID uuid.UUID, controllerURL string) error {
 	client := http.DefaultClient
 
 	for retries := 0; retries < maxRetries; retries++ {
-		success, err := attemptDelete(client, fullURL)
+		success, err := attemptDelete(client, fullURL, controlPlaneSecret)
 
 		if err != nil {
 			slog.Error("Error sending delete request", "error", err, "attempt", retries+1)
@@ -141,6 +149,16 @@ func main() {
 		slog.Error("Error parsing backend URL", "error", err)
 		os.Exit(1)
 	}
+	err = godotenv.Load(".env")
+	if err != nil {
+		slog.Error("Error loading .env file", "error", err)
+		os.Exit(1)
+	}
+	controlPlaneSecret := os.Getenv("CONTROL_PLANE_SECRET")
+	if controlPlaneSecret == "" {
+		slog.Error("CONTROL_PLANE_SECRET is not set")
+		os.Exit(1)
+	}
 	server := &Server{addr: parsedURL, delay: *delayFlag}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.HealthHandler())
@@ -156,7 +174,6 @@ func main() {
 	slog.Info("Starting backend server", "url", parsedURL.String())
 	uniqueID := uuid.New()
 	loadBalancerURL := "http://localhost:8081"
-	go SendServerRegistrationRequest(parsedURL.String(), uniqueID, loadBalancerURL)
 	sigtermCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
@@ -166,10 +183,14 @@ func main() {
 			stop()
 		}
 	}()
-
+	err = SendServerRegistrationRequest(parsedURL.String(), uniqueID, loadBalancerURL, controlPlaneSecret)
+	if err != nil {
+		slog.Error("Error sending server registration request", "error", err)
+		stop()
+	}
 	<-sigtermCtx.Done()
 	slog.Info("Shutting down server gracefully...")
-	err = SendServerDeleteRequest(uniqueID, loadBalancerURL)
+	err = SendServerDeleteRequest(uniqueID, loadBalancerURL, controlPlaneSecret)
 	if err != nil {
 		slog.Error("Error sending server delete request", "error", err)
 	}
