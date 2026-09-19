@@ -19,11 +19,10 @@ import (
 func main() {
 	sigtermCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	servers := []*balancer.BackendServer{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	healthCheckPeriod := 1 * time.Second
-	rr := balancer.NewRoundRobin(servers)
+	rr := balancer.NewRoundRobin()
 	err := godotenv.Load(".env")
 	if err != nil {
 		slog.Error("Error loading .env file", "error", err)

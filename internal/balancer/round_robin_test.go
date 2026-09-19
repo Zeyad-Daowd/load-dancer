@@ -11,6 +11,25 @@ import (
 	"github.com/google/uuid"
 )
 
+func newRoundRobinTest(servers []*BackendServer) *RoundRobin {
+	rr := NewRoundRobin()
+	for _, server := range servers {
+		err := rr.AddServer(server, uuid.New())
+		if err != nil {
+			panic(err)
+		}
+	}
+	return rr
+}
+
+func addServerFromUrlTest(rr *RoundRobin, ctx context.Context, url string, uniqueID uuid.UUID, healthCheckPeriod time.Duration) error {
+	server, err := CreateBackendServer(url)
+	if err != nil {
+		return err
+	}
+	return rr.AddServer(server, uniqueID)
+}
+
 func createMockBackendServer(responseText string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(responseText))
@@ -31,7 +50,7 @@ func TestRoundRobinHandler(t *testing.T) {
 		}
 		servers = append(servers, server)
 	}
-	rr := NewRoundRobin(servers)
+	rr := newRoundRobinTest(servers)
 	handler := rr.Handler()
 	for i := 0; i < 6; i++ {
 		req := httptest.NewRequest("GET", "/", nil)
@@ -59,7 +78,7 @@ func TestRoundRobinHandlerConcurrent(t *testing.T) {
 		}
 		servers = append(servers, server)
 	}
-	rr := NewRoundRobin(servers)
+	rr := newRoundRobinTest(servers)
 	handler := rr.Handler()
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
@@ -100,7 +119,7 @@ func TestRoundRobinHandlerOneServer(t *testing.T) {
 		}
 		servers = append(servers, server)
 	}
-	rr := NewRoundRobin(servers)
+	rr := newRoundRobinTest(servers)
 	handler := rr.Handler()
 	for i := 0; i < 6; i++ {
 		req := httptest.NewRequest("GET", "/", nil)
@@ -115,7 +134,7 @@ func TestRoundRobinHandlerOneServer(t *testing.T) {
 }
 func TestRoundRobinHandlerNoServers(t *testing.T) {
 	servers := []*BackendServer{}
-	rr := NewRoundRobin(servers)
+	rr := newRoundRobinTest(servers)
 	handler := rr.Handler()
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -148,12 +167,10 @@ func TestRoundRobinHandlerSkipsUnhealthyServer(t *testing.T) {
 		servers = append(servers, server)
 	}
 
+	rr := newRoundRobinTest(servers)
+	handler := rr.Handler()
 	// Backend 2 is unhealthy.
 	servers[1].SetHealth(false)
-
-	rr := NewRoundRobin(servers)
-	handler := rr.Handler()
-
 	expectedResponses := []string{
 		responses[0],
 		responses[2],
@@ -201,7 +218,7 @@ func TestRoundRobinHandlerAllServersUnhealthy(t *testing.T) {
 		server.SetHealth(false)
 	}
 
-	rr := NewRoundRobin(servers)
+	rr := newRoundRobinTest(servers)
 	handler := rr.Handler()
 
 	req := httptest.NewRequest("GET", "/", nil)
@@ -235,12 +252,10 @@ func TestRoundRobinHandlerRecoveredServer(t *testing.T) {
 		servers = append(servers, server)
 	}
 
-	// Backend 2 starts unhealthy.
-	servers[1].SetHealth(false)
-
-	rr := NewRoundRobin(servers)
+	rr := newRoundRobinTest(servers)
 	handler := rr.Handler()
-
+	// Backend 2 becomes unhealthy.
+	servers[1].SetHealth(false)
 	// Backend 2 should be skipped.
 	expectedResponses := []string{
 		responses[0],
@@ -286,7 +301,7 @@ func TestRoundRobinHandlerRecoveredServer(t *testing.T) {
 }
 
 func TestNoBackends(t *testing.T) {
-	rr := NewRoundRobin([]*BackendServer{})
+	rr := newRoundRobinTest([]*BackendServer{})
 	handler := rr.Handler()
 
 	req := httptest.NewRequest("GET", "/", nil)
@@ -301,12 +316,12 @@ func TestNoBackends(t *testing.T) {
 
 func TestAddingServer(t *testing.T) {
 	urlStr := "http://localhost:8080"
-	rr := NewRoundRobin([]*BackendServer{})
+	rr := newRoundRobinTest([]*BackendServer{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uniqueID := uuid.New()
 	healthCheckPeriod := 10 * time.Second
-	err := rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	err := addServerFromUrlTest(rr, ctx, urlStr, uniqueID, healthCheckPeriod)
 	if err != nil {
 		t.Fatalf("Failed to add server: %v", err)
 	}
@@ -323,16 +338,16 @@ func TestAddingServer(t *testing.T) {
 
 func TestAddingDuplicateServer(t *testing.T) {
 	urlStr := "http://localhost:8080"
-	rr := NewRoundRobin([]*BackendServer{})
+	rr := newRoundRobinTest([]*BackendServer{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uniqueID := uuid.New()
 	healthCheckPeriod := 10 * time.Second
-	err := rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	err := addServerFromUrlTest(rr, ctx, urlStr, uniqueID, healthCheckPeriod)
 	if err != nil {
 		t.Fatalf("Failed to add server: %v", err)
 	}
-	err = rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	err = addServerFromUrlTest(rr, ctx, urlStr, uniqueID, healthCheckPeriod)
 	if err != ErrExistingBackend {
 		t.Fatalf("Expected ErrExistingBackend, got: %v", err)
 	}
@@ -340,12 +355,12 @@ func TestAddingDuplicateServer(t *testing.T) {
 
 func TestReaddingRemovedServer(t *testing.T) {
 	urlStr := "http://localhost:8080"
-	rr := NewRoundRobin([]*BackendServer{})
+	rr := newRoundRobinTest([]*BackendServer{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uniqueID := uuid.New()
 	healthCheckPeriod := 10 * time.Second
-	err := rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	err := addServerFromUrlTest(rr, ctx, urlStr, uniqueID, healthCheckPeriod)
 	if err != nil {
 		t.Fatalf("Failed to add server: %v", err)
 	}
@@ -353,7 +368,7 @@ func TestReaddingRemovedServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to remove server: %v", err)
 	}
-	err = rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	err = addServerFromUrlTest(rr, ctx, urlStr, uniqueID, healthCheckPeriod)
 	if err != nil {
 		t.Fatalf("Failed to add server: %v", err)
 	}
@@ -361,12 +376,12 @@ func TestReaddingRemovedServer(t *testing.T) {
 
 func TestRemovingServer(t *testing.T) {
 	urlStr := "http://localhost:8080"
-	rr := NewRoundRobin([]*BackendServer{})
+	rr := newRoundRobinTest([]*BackendServer{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uniqueID := uuid.New()
 
-	err := rr.AddServer(ctx, urlStr, uniqueID, 10*time.Second)
+	err := addServerFromUrlTest(rr, ctx, urlStr, uniqueID, 10*time.Second)
 	if err != nil {
 		t.Fatalf("Failed to add server: %v", err)
 	}
@@ -384,7 +399,7 @@ func TestRemovingServer(t *testing.T) {
 }
 
 func TestRemovingNonexistentServer(t *testing.T) {
-	rr := NewRoundRobin([]*BackendServer{})
+	rr := newRoundRobinTest([]*BackendServer{})
 
 	err := rr.RemoveServer(uuid.New())
 
@@ -398,12 +413,12 @@ func TestAddedServerIsRoutable(t *testing.T) {
 	server := createMockBackendServer(response)
 	defer server.Close()
 	urlStr := server.URL
-	rr := NewRoundRobin([]*BackendServer{})
+	rr := newRoundRobinTest([]*BackendServer{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uniqueID := uuid.New()
 	healthCheckPeriod := 10 * time.Second
-	err := rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	err := addServerFromUrlTest(rr, ctx, urlStr, uniqueID, healthCheckPeriod)
 	if err != nil {
 		t.Fatalf("Failed to add server: %v", err)
 	}
@@ -422,7 +437,7 @@ func TestAddedServerIsRoutable(t *testing.T) {
 func TestRemovedServerIsNotRoutable(t *testing.T) {
 	responses := []string{"Response from backend 1", "Response from backend 2"}
 	urls := []string{}
-	rr := NewRoundRobin([]*BackendServer{})
+	rr := newRoundRobinTest([]*BackendServer{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	healthCheckPeriod := 10 * time.Second
@@ -431,7 +446,7 @@ func TestRemovedServerIsNotRoutable(t *testing.T) {
 		server := createMockBackendServer(response)
 		defer server.Close()
 		urls = append(urls, server.URL)
-		err := rr.AddServer(ctx, server.URL, ids[i], healthCheckPeriod)
+		err := addServerFromUrlTest(rr, ctx, server.URL, ids[i], healthCheckPeriod)
 		if err != nil {
 			t.Fatalf("Failed to add server: %v", err)
 		}

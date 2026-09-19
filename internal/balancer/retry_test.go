@@ -38,7 +38,7 @@ func TestRetry(t *testing.T) {
 	// Make the first backend unavailable.
 	backend1.Close()
 
-	rr := NewRoundRobin([]*BackendServer{server1, server2})
+	rr := newRoundRobinTest([]*BackendServer{server1, server2})
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -77,7 +77,7 @@ func TestMultipleRetries(t *testing.T) {
 	backend1.Close()
 	backend2.Close()
 
-	rr := NewRoundRobin([]*BackendServer{server1, server2, server3})
+	rr := newRoundRobinTest([]*BackendServer{server1, server2, server3})
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestRetryStopsAfterMaxAttempts(t *testing.T) {
 	backend2.Close()
 	backend3.Close()
 
-	rr := NewRoundRobin([]*BackendServer{server1, server2, server3, server4})
+	rr := newRoundRobinTest([]*BackendServer{server1, server2, server3, server4})
 
 	// expected it to fail since 3 failed servers
 	errorMessage := "backend unavailable"
@@ -162,7 +162,7 @@ func TestRetryTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rr := NewRoundRobin([]*BackendServer{server1, server2})
+	rr := newRoundRobinTest([]*BackendServer{server1, server2})
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -191,7 +191,7 @@ func TestNoRetryPost(t *testing.T) {
 		t.Fatal(err)
 	}
 	backend1.Close() // Make the first backend unavailable.
-	rr := NewRoundRobin([]*BackendServer{server1, server2})
+	rr := newRoundRobinTest([]*BackendServer{server1, server2})
 
 	errorMessage := "backend unavailable"
 	req := httptest.NewRequest("POST", "/", nil)
@@ -219,7 +219,7 @@ func TestNoRetryInternalServerErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rr := NewRoundRobin([]*BackendServer{server1, server2})
+	rr := newRoundRobinTest([]*BackendServer{server1, server2})
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()

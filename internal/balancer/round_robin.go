@@ -19,6 +19,7 @@ const (
 	BackendServerKey contextKey = "backendServerKey"
 )
 
+// TODO: make an interface for the balancer to allow for different balancing strategies
 type RoundRobin struct {
 	servers          []*BackendServer
 	mutex            sync.Mutex
@@ -54,7 +55,7 @@ func (rr *RoundRobin) Handler() http.HandlerFunc {
 	}
 }
 
-func NewRoundRobin(servers []*BackendServer) *RoundRobin {
+func NewRoundRobin() *RoundRobin {
 	// reverse proxy to forward requests
 	proxy := httputil.ReverseProxy{
 		Director: func(req *http.Request) {},
@@ -68,7 +69,7 @@ func NewRoundRobin(servers []*BackendServer) *RoundRobin {
 		}
 	}
 	rr := &RoundRobin{
-		servers: servers,
+		servers: []*BackendServer{},
 		current: 0,
 		mutex:   sync.Mutex{},
 		retryTransport: &RetryBalancerTransport{
@@ -115,24 +116,31 @@ func (rr *RoundRobin) GetServers() []backendStatus {
 
 var ErrExistingBackend = errors.New("backend server already exists")
 
-func (rr *RoundRobin) AddServer(ctx context.Context, urlStr string, uniqueID uuid.UUID, healthCheckPeriod time.Duration) error {
-	server, err := CreateBackendServer(urlStr)
-	if err != nil {
-		return err
-	}
+func (rr *RoundRobin) AddServer(server *BackendServer, uniqueID uuid.UUID) error {
 	rr.mutex.Lock()
 	defer rr.mutex.Unlock()
 	_, exists := rr.serversMap[uniqueID]
 	if exists {
-		slog.Warn("Attempted to add a backend server that already exists", "url", urlStr, "uniqueID", uniqueID.String())
+		slog.Warn("Attempted to add a backend server that already exists", "url", server.addr.String(), "uniqueID", uniqueID.String())
 		return ErrExistingBackend
 	}
 	rr.serversMap[uniqueID] = server
 	rr.servers = append(rr.servers, server)
+	slog.Info("Added new backend server", "url", server.addr.String())
+	return nil
+}
+
+func (rr *RoundRobin) StartHealthChecks(ctx context.Context, healthCheckPeriod time.Duration, uniqueID uuid.UUID, server *BackendServer) error {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+	_, exists := rr.serversMap[uniqueID]
+	if !exists {
+		slog.Warn("Attempted to start health checks for a backend server that does not exist", "url", server.addr.String(), "uniqueID", uniqueID.String())
+		return ErrBackendNotFound
+	}
 	ctxChild, cancel := context.WithCancel(ctx)
 	rr.serversCancelMap[uniqueID] = cancel
 	go HealthCheck(ctxChild, []*BackendServer{server}, healthCheckPeriod)
-	slog.Info("Added new backend server", "url", urlStr)
 	return nil
 }
 

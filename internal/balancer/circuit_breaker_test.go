@@ -81,7 +81,7 @@ func TestCircuitBreakerSkipsPersistentlyFailingBackend(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rr := NewRoundRobin([]*BackendServer{server1, server2})
+	rr := newRoundRobinTest([]*BackendServer{server1, server2})
 	handler := rr.Handler()
 
 	// Round robin alternates 1,2,1,2,... - 6 requests guarantees backend1

@@ -72,9 +72,21 @@ func (bc *BackendController) addBackendHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = bc.balancer.AddServer(bc.ctx, req.URL, req.UniqueID, bc.healthCheckPeriod)
+		server, err := balancer.CreateBackendServer(req.URL)
+		if err != nil {
+			slog.Error("Error creating backend server", "url", req.URL, "error", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = bc.balancer.AddServer(server, req.UniqueID)
 		if err != nil && errors.Is(err, balancer.ErrExistingBackend) {
 			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		err = bc.balancer.StartHealthChecks(bc.ctx, bc.healthCheckPeriod, req.UniqueID, server)
+		if err != nil {
+			slog.Error("Error starting health checks for backend server", "url", req.URL, "error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if err != nil {
