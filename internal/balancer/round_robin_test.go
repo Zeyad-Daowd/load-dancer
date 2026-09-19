@@ -1,10 +1,14 @@
 package balancer
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 func createMockBackendServer(responseText string) *httptest.Server {
@@ -278,5 +282,168 @@ func TestRoundRobinHandlerRecoveredServer(t *testing.T) {
 		if got := w.Body.String(); got != expected {
 			t.Errorf("after recovery, request %d: expected %q, got %q", i, expected, got)
 		}
+	}
+}
+
+func TestNoBackends(t *testing.T) {
+	rr := NewRoundRobin([]*BackendServer{})
+	handler := rr.Handler()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, w.Code)
+	}
+}
+
+func TestAddingServer(t *testing.T) {
+	urlStr := "http://localhost:8080"
+	rr := NewRoundRobin([]*BackendServer{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	uniqueID := uuid.New()
+	healthCheckPeriod := 10 * time.Second
+	err := rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	if err != nil {
+		t.Fatalf("Failed to add server: %v", err)
+	}
+	servers := rr.GetServers()
+
+	if len(servers) != 1 {
+		t.Fatalf("Expected 1 server, got %d", len(servers))
+	}
+
+	if servers[0].Id != uniqueID {
+		t.Fatalf("Expected ID %s, got %s", uniqueID, servers[0].Id)
+	}
+}
+
+func TestAddingDuplicateServer(t *testing.T) {
+	urlStr := "http://localhost:8080"
+	rr := NewRoundRobin([]*BackendServer{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	uniqueID := uuid.New()
+	healthCheckPeriod := 10 * time.Second
+	err := rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	if err != nil {
+		t.Fatalf("Failed to add server: %v", err)
+	}
+	err = rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	if err != ErrExistingBackend {
+		t.Fatalf("Expected ErrExistingBackend, got: %v", err)
+	}
+}
+
+func TestReaddingRemovedServer(t *testing.T) {
+	urlStr := "http://localhost:8080"
+	rr := NewRoundRobin([]*BackendServer{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	uniqueID := uuid.New()
+	healthCheckPeriod := 10 * time.Second
+	err := rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	if err != nil {
+		t.Fatalf("Failed to add server: %v", err)
+	}
+	err = rr.RemoveServer(uniqueID)
+	if err != nil {
+		t.Fatalf("Failed to remove server: %v", err)
+	}
+	err = rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	if err != nil {
+		t.Fatalf("Failed to add server: %v", err)
+	}
+}
+
+func TestRemovingServer(t *testing.T) {
+	urlStr := "http://localhost:8080"
+	rr := NewRoundRobin([]*BackendServer{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	uniqueID := uuid.New()
+
+	err := rr.AddServer(ctx, urlStr, uniqueID, 10*time.Second)
+	if err != nil {
+		t.Fatalf("Failed to add server: %v", err)
+	}
+
+	err = rr.RemoveServer(uniqueID)
+	if err != nil {
+		t.Fatalf("Failed to remove server: %v", err)
+	}
+
+	servers := rr.GetServers()
+
+	if len(servers) != 0 {
+		t.Fatalf("Expected 0 servers after removal, got %d", len(servers))
+	}
+}
+
+func TestRemovingNonexistentServer(t *testing.T) {
+	rr := NewRoundRobin([]*BackendServer{})
+
+	err := rr.RemoveServer(uuid.New())
+
+	if err != ErrBackendNotFound {
+		t.Fatalf("Expected ErrBackendNotFound, got: %v", err)
+	}
+}
+
+func TestAddedServerIsRoutable(t *testing.T) {
+	response := "Response from backend 1"
+	server := createMockBackendServer(response)
+	defer server.Close()
+	urlStr := server.URL
+	rr := NewRoundRobin([]*BackendServer{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	uniqueID := uuid.New()
+	healthCheckPeriod := 10 * time.Second
+	err := rr.AddServer(ctx, urlStr, uniqueID, healthCheckPeriod)
+	if err != nil {
+		t.Fatalf("Failed to add server: %v", err)
+	}
+
+	handler := rr.Handler()
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+	body := w.Body.String()
+	expectedResponse := response
+	if body != expectedResponse {
+		t.Errorf("Expected response: %s, got: %s", expectedResponse, body)
+	}
+}
+
+func TestRemovedServerIsNotRoutable(t *testing.T) {
+	responses := []string{"Response from backend 1", "Response from backend 2"}
+	urls := []string{}
+	rr := NewRoundRobin([]*BackendServer{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	healthCheckPeriod := 10 * time.Second
+	ids := []uuid.UUID{uuid.New(), uuid.New()}
+	for i, response := range responses {
+		server := createMockBackendServer(response)
+		defer server.Close()
+		urls = append(urls, server.URL)
+		err := rr.AddServer(ctx, server.URL, ids[i], healthCheckPeriod)
+		if err != nil {
+			t.Fatalf("Failed to add server: %v", err)
+		}
+	}
+	rr.RemoveServer(ids[0]) // Remove the first server
+	handler := rr.Handler()
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+	body := w.Body.String()
+	expectedResponse := responses[1]
+	if body != expectedResponse {
+		t.Errorf("Expected response: %s, got: %s", expectedResponse, body)
 	}
 }
