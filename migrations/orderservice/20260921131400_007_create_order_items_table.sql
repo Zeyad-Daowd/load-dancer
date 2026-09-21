@@ -8,7 +8,9 @@ CREATE TABLE order_items (
     CONSTRAINT quantity_check
         CHECK (quantity > 0),
     CONSTRAINT unit_price_cents_check
-        CHECK (unit_price_cents >= 0)
+        CHECK (unit_price_cents >= 0),
+    CONSTRAINT order_product_unique
+        UNIQUE (order_id, product_id)
 );
 -- +goose Down
 DROP TABLE order_items;
