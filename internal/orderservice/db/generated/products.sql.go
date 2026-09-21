@@ -33,6 +33,22 @@ func (q *Queries) AddProduct(ctx context.Context, arg AddProductParams) (Product
 	return i, err
 }
 
+const addProductStock = `-- name: AddProductStock :one
+INSERT INTO inventory (product_id, stock_count) VALUES ($1, $2) RETURNING product_id, stock_count
+`
+
+type AddProductStockParams struct {
+	ProductID  int32
+	StockCount int32
+}
+
+func (q *Queries) AddProductStock(ctx context.Context, arg AddProductStockParams) (Inventory, error) {
+	row := q.db.QueryRow(ctx, addProductStock, arg.ProductID, arg.StockCount)
+	var i Inventory
+	err := row.Scan(&i.ProductID, &i.StockCount)
+	return i, err
+}
+
 const getProduct = `-- name: GetProduct :one
 SELECT id, name, price_cents, description FROM products WHERE id = $1
 `

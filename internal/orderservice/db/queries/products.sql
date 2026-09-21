@@ -6,3 +6,6 @@ INSERT INTO products (name, price_cents, description) VALUES ($1, $2, $3) RETURN
 
 -- name: GetProducts :many
 SELECT * FROM products;
+
+-- name: AddProductStock :one
+INSERT INTO inventory (product_id, stock_count) VALUES ($1, $2) RETURNING *;
