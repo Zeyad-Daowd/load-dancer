@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/zeyad-daowd/load-dancer/internal/orderservice/db/generated"
@@ -201,4 +202,59 @@ func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Or
 
 	return &order, nil
 
+}
+
+type OrderItem struct {
+	ID         int64
+	Status     string
+	CreatedAt  time.Time
+	TotalCents int32
+}
+
+func (s *OrderService) GetUserOrders(ctx context.Context, userID int32) ([]OrderItem, error) {
+	res, err := s.queries.GetUserOrders(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	orders := []OrderItem{}
+	var createdAt time.Time
+	for _, order := range res {
+		err := order.CreatedAt.Scan(&createdAt)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, OrderItem{
+			ID:         order.ID,
+			Status:     order.Status,
+			CreatedAt:  createdAt,
+			TotalCents: order.TotalCents,
+		})
+	}
+	return orders, nil
+}
+
+type OrderItemDetails struct {
+	ID             int64
+	ProductID      int32
+	OrderID        int64
+	Quantity       int32
+	UnitPriceCents int32
+}
+
+func (s *OrderService) GetOrderItems(ctx context.Context, orderID int64) ([]OrderItemDetails, error) {
+	res, err := s.queries.GetOrderItems(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	orders := []OrderItemDetails{}
+	for _, order := range res {
+		orders = append(orders, OrderItemDetails{
+			ID:             order.ID,
+			ProductID:      order.ProductID,
+			OrderID:        order.OrderID,
+			Quantity:       order.Quantity,
+			UnitPriceCents: order.UnitPriceCents,
+		})
+	}
+	return orders, nil
 }

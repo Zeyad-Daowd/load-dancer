@@ -78,6 +78,17 @@ func (q *Queries) GetProducts(ctx context.Context) ([]Product, error) {
 	return items, nil
 }
 
+const getStock = `-- name: GetStock :one
+SELECT stock_count from inventory WHERE product_id = $1
+`
+
+func (q *Queries) GetStock(ctx context.Context, productID int32) (int32, error) {
+	row := q.db.QueryRow(ctx, getStock, productID)
+	var stock_count int32
+	err := row.Scan(&stock_count)
+	return stock_count, err
+}
+
 const increaseProductStock = `-- name: IncreaseProductStock :one
 UPDATE inventory SET stock_count = inventory.stock_count + $2 WHERE product_id = $1 RETURNING product_id, stock_count
 `

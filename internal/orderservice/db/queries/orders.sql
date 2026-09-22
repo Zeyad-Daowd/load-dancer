@@ -36,3 +36,9 @@ UPDATE orders
         WHERE order_id = $1
     )
     WHERE id = $1;
+
+-- name: GetUserOrders :many
+SELECT * FROM orders WHERE user_id = $1;
+
+-- name: GetOrderItems :many
+SELECT * FROM order_items WHERE order_id = $1;

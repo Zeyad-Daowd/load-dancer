@@ -131,6 +131,36 @@ func (q *Queries) GetCheckoutItems(ctx context.Context, orderID int64) ([]GetChe
 	return items, nil
 }
 
+const getOrderItems = `-- name: GetOrderItems :many
+SELECT id, product_id, order_id, quantity, unit_price_cents FROM order_items WHERE order_id = $1
+`
+
+func (q *Queries) GetOrderItems(ctx context.Context, orderID int64) ([]OrderItem, error) {
+	rows, err := q.db.Query(ctx, getOrderItems, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderItem
+	for rows.Next() {
+		var i OrderItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.OrderID,
+			&i.Quantity,
+			&i.UnitPriceCents,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOrderStatus = `-- name: GetOrderStatus :one
 SELECT status from orders WHERE id = $1
 `
@@ -140,6 +170,37 @@ func (q *Queries) GetOrderStatus(ctx context.Context, id int64) (string, error) 
 	var status string
 	err := row.Scan(&status)
 	return status, err
+}
+
+const getUserOrders = `-- name: GetUserOrders :many
+SELECT id, user_id, status, created_at, idempotency_key, total_cents FROM orders WHERE user_id = $1
+`
+
+func (q *Queries) GetUserOrders(ctx context.Context, userID int32) ([]Order, error) {
+	rows, err := q.db.Query(ctx, getUserOrders, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Order
+	for rows.Next() {
+		var i Order
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Status,
+			&i.CreatedAt,
+			&i.IdempotencyKey,
+			&i.TotalCents,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const removeProductQuantityOrderItem = `-- name: RemoveProductQuantityOrderItem :one

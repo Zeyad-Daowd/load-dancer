@@ -87,3 +87,36 @@ func (s *OrderService) IncreaseProductStock(ctx context.Context, productID int32
 		StockCount: updatedInventory.StockCount,
 	}, nil
 }
+
+type ProductItem struct {
+	ID          int32
+	Name        string
+	PriceCents  int32
+	Description string
+}
+
+func (s *OrderService) GetProducts(ctx context.Context) ([]ProductItem, error) {
+	res, err := s.queries.GetProducts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	products := []ProductItem{}
+	for _, prod := range res {
+		products = append(products, ProductItem{
+			ID:          prod.ID,
+			Name:        prod.Name,
+			PriceCents:  prod.PriceCents,
+			Description: prod.Description.String,
+		})
+	}
+	return products, nil
+
+}
+
+func (s *OrderService) GetStock(ctx context.Context, productID int32) (int32, error) {
+	stock, err := s.queries.GetStock(ctx, productID)
+	if err != nil {
+		return 0, err
+	}
+	return stock, nil
+}
