@@ -204,26 +204,26 @@ func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Or
 
 }
 
-type OrderItem struct {
+type Order struct {
 	ID         int64
 	Status     string
 	CreatedAt  time.Time
 	TotalCents int32
 }
 
-func (s *OrderService) GetUserOrders(ctx context.Context, userID int32) ([]OrderItem, error) {
+func (s *OrderService) GetUserOrders(ctx context.Context, userID int32) ([]Order, error) {
 	res, err := s.queries.GetUserOrders(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	orders := []OrderItem{}
+	orders := []Order{}
 	var createdAt time.Time
 	for _, order := range res {
 		err := order.CreatedAt.Scan(&createdAt)
 		if err != nil {
 			return nil, err
 		}
-		orders = append(orders, OrderItem{
+		orders = append(orders, Order{
 			ID:         order.ID,
 			Status:     order.Status,
 			CreatedAt:  createdAt,
