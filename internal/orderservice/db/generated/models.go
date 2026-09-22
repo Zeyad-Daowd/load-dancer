@@ -28,7 +28,6 @@ type Order struct {
 }
 
 type OrderItem struct {
-	ID             int64
 	ProductID      int32
 	OrderID        int64
 	Quantity       int32

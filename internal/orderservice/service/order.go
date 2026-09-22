@@ -234,7 +234,6 @@ func (s *OrderService) GetUserOrders(ctx context.Context, userID int32) ([]Order
 }
 
 type OrderItemDetails struct {
-	ID             int64
 	ProductID      int32
 	ProductName    string
 	OrderID        int64
@@ -250,7 +249,6 @@ func (s *OrderService) GetOrderItems(ctx context.Context, orderID int64) ([]Orde
 	orders := []OrderItemDetails{}
 	for _, order := range res {
 		orders = append(orders, OrderItemDetails{
-			ID:             order.ID,
 			ProductID:      order.ProductID,
 			OrderID:        order.OrderID,
 			Quantity:       order.Quantity,
@@ -291,7 +289,6 @@ func (s *OrderService) GetOrder(ctx context.Context, orderID int64) (*OrderDetai
 	order.items = []OrderItemDetails{}
 	for _, item := range res {
 		order.items = append(order.items, OrderItemDetails{
-			ID:             item.ID_2,
 			ProductID:      item.ProductID,
 			OrderID:        item.OrderID,
 			Quantity:       item.Quantity,

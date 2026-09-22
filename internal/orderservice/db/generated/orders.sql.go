@@ -40,7 +40,7 @@ INSERT INTO order_items (product_id, order_id, quantity, unit_price_cents)
     SELECT $1, $2, $3, price_cents
     FROM products
     WHERE id = $1
-    RETURNING id, product_id, order_id, quantity, unit_price_cents
+    RETURNING product_id, order_id, quantity, unit_price_cents
 `
 
 type AddProductOrderItemParams struct {
@@ -53,7 +53,6 @@ func (q *Queries) AddProductOrderItem(ctx context.Context, arg AddProductOrderIt
 	row := q.db.QueryRow(ctx, addProductOrderItem, arg.ProductID, arg.OrderID, arg.Quantity)
 	var i OrderItem
 	err := row.Scan(
-		&i.ID,
 		&i.ProductID,
 		&i.OrderID,
 		&i.Quantity,
@@ -79,7 +78,7 @@ func (q *Queries) DecreaseInventoryStock(ctx context.Context, arg DecreaseInvent
 }
 
 const editProductQuantityOrderItem = `-- name: EditProductQuantityOrderItem :one
-UPDATE order_items SET quantity = $1 WHERE product_id = $2 and order_id = $3 RETURNING id, product_id, order_id, quantity, unit_price_cents
+UPDATE order_items SET quantity = $1 WHERE product_id = $2 and order_id = $3 RETURNING product_id, order_id, quantity, unit_price_cents
 `
 
 type EditProductQuantityOrderItemParams struct {
@@ -92,7 +91,6 @@ func (q *Queries) EditProductQuantityOrderItem(ctx context.Context, arg EditProd
 	row := q.db.QueryRow(ctx, editProductQuantityOrderItem, arg.Quantity, arg.ProductID, arg.OrderID)
 	var i OrderItem
 	err := row.Scan(
-		&i.ID,
 		&i.ProductID,
 		&i.OrderID,
 		&i.Quantity,
@@ -134,7 +132,7 @@ func (q *Queries) GetCheckoutItems(ctx context.Context, orderID int64) ([]GetChe
 }
 
 const getOrder = `-- name: GetOrder :many
-SELECT o.id, o.user_id, o.status, o.created_at, o.idempotency_key, o.total_cents, oi.id, oi.product_id, oi.order_id, oi.quantity, oi.unit_price_cents, p.name 
+SELECT o.id, o.user_id, o.status, o.created_at, o.idempotency_key, o.total_cents, oi.product_id, oi.order_id, oi.quantity, oi.unit_price_cents, p.name 
 FROM orders o JOIN order_items oi ON o.id = oi.order_id 
 JOIN products p ON oi.product_id = p.id 
 WHERE o.id = $1
@@ -147,7 +145,6 @@ type GetOrderRow struct {
 	CreatedAt      pgtype.Timestamp
 	IdempotencyKey string
 	TotalCents     int32
-	ID_2           int64
 	ProductID      int32
 	OrderID        int64
 	Quantity       int32
@@ -171,7 +168,6 @@ func (q *Queries) GetOrder(ctx context.Context, id int64) ([]GetOrderRow, error)
 			&i.CreatedAt,
 			&i.IdempotencyKey,
 			&i.TotalCents,
-			&i.ID_2,
 			&i.ProductID,
 			&i.OrderID,
 			&i.Quantity,
@@ -189,11 +185,10 @@ func (q *Queries) GetOrder(ctx context.Context, id int64) ([]GetOrderRow, error)
 }
 
 const getOrderItems = `-- name: GetOrderItems :many
-SELECT oi.id, oi.product_id, oi.order_id, oi.quantity, oi.unit_price_cents, p.name as product_name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE order_id = $1
+SELECT oi.product_id, oi.order_id, oi.quantity, oi.unit_price_cents, p.name as product_name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE order_id = $1
 `
 
 type GetOrderItemsRow struct {
-	ID             int64
 	ProductID      int32
 	OrderID        int64
 	Quantity       int32
@@ -211,7 +206,6 @@ func (q *Queries) GetOrderItems(ctx context.Context, orderID int64) ([]GetOrderI
 	for rows.Next() {
 		var i GetOrderItemsRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.ProductID,
 			&i.OrderID,
 			&i.Quantity,
@@ -271,7 +265,7 @@ func (q *Queries) GetUserOrders(ctx context.Context, userID int32) ([]Order, err
 }
 
 const removeProductQuantityOrderItem = `-- name: RemoveProductQuantityOrderItem :one
-DELETE FROM order_items WHERE product_id = $1 AND order_id = $2 RETURNING id, product_id, order_id, quantity, unit_price_cents
+DELETE FROM order_items WHERE product_id = $1 AND order_id = $2 RETURNING product_id, order_id, quantity, unit_price_cents
 `
 
 type RemoveProductQuantityOrderItemParams struct {
@@ -283,7 +277,6 @@ func (q *Queries) RemoveProductQuantityOrderItem(ctx context.Context, arg Remove
 	row := q.db.QueryRow(ctx, removeProductQuantityOrderItem, arg.ProductID, arg.OrderID)
 	var i OrderItem
 	err := row.Scan(
-		&i.ID,
 		&i.ProductID,
 		&i.OrderID,
 		&i.Quantity,
