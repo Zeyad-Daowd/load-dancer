@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addOrder = `-- name: AddOrder :one
@@ -131,25 +133,90 @@ func (q *Queries) GetCheckoutItems(ctx context.Context, orderID int64) ([]GetChe
 	return items, nil
 }
 
-const getOrderItems = `-- name: GetOrderItems :many
-SELECT id, product_id, order_id, quantity, unit_price_cents FROM order_items WHERE order_id = $1
+const getOrder = `-- name: GetOrder :many
+SELECT o.id, o.user_id, o.status, o.created_at, o.idempotency_key, o.total_cents, oi.id, oi.product_id, oi.order_id, oi.quantity, oi.unit_price_cents, p.name 
+FROM orders o JOIN order_items oi ON o.id = oi.order_id 
+JOIN products p ON oi.product_id = p.id 
+WHERE o.id = $1
 `
 
-func (q *Queries) GetOrderItems(ctx context.Context, orderID int64) ([]OrderItem, error) {
+type GetOrderRow struct {
+	ID             int64
+	UserID         int32
+	Status         string
+	CreatedAt      pgtype.Timestamp
+	IdempotencyKey string
+	TotalCents     int32
+	ID_2           int64
+	ProductID      int32
+	OrderID        int64
+	Quantity       int32
+	UnitPriceCents int32
+	Name           string
+}
+
+func (q *Queries) GetOrder(ctx context.Context, id int64) ([]GetOrderRow, error) {
+	rows, err := q.db.Query(ctx, getOrder, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOrderRow
+	for rows.Next() {
+		var i GetOrderRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Status,
+			&i.CreatedAt,
+			&i.IdempotencyKey,
+			&i.TotalCents,
+			&i.ID_2,
+			&i.ProductID,
+			&i.OrderID,
+			&i.Quantity,
+			&i.UnitPriceCents,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrderItems = `-- name: GetOrderItems :many
+SELECT oi.id, oi.product_id, oi.order_id, oi.quantity, oi.unit_price_cents, p.name as product_name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE order_id = $1
+`
+
+type GetOrderItemsRow struct {
+	ID             int64
+	ProductID      int32
+	OrderID        int64
+	Quantity       int32
+	UnitPriceCents int32
+	ProductName    string
+}
+
+func (q *Queries) GetOrderItems(ctx context.Context, orderID int64) ([]GetOrderItemsRow, error) {
 	rows, err := q.db.Query(ctx, getOrderItems, orderID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []OrderItem
+	var items []GetOrderItemsRow
 	for rows.Next() {
-		var i OrderItem
+		var i GetOrderItemsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProductID,
 			&i.OrderID,
 			&i.Quantity,
 			&i.UnitPriceCents,
+			&i.ProductName,
 		); err != nil {
 			return nil, err
 		}

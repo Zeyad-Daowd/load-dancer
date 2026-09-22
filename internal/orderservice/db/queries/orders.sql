@@ -40,5 +40,11 @@ UPDATE orders
 -- name: GetUserOrders :many
 SELECT * FROM orders WHERE user_id = $1;
 
+-- name: GetOrder :many
+SELECT o.*, oi.*, p.name 
+FROM orders o JOIN order_items oi ON o.id = oi.order_id 
+JOIN products p ON oi.product_id = p.id 
+WHERE o.id = $1;
+
 -- name: GetOrderItems :many
-SELECT * FROM order_items WHERE order_id = $1;
+SELECT oi.*, p.name as product_name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE order_id = $1;

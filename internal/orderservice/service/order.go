@@ -236,6 +236,7 @@ func (s *OrderService) GetUserOrders(ctx context.Context, userID int32) ([]Order
 type OrderItemDetails struct {
 	ID             int64
 	ProductID      int32
+	ProductName    string
 	OrderID        int64
 	Quantity       int32
 	UnitPriceCents int32
@@ -254,7 +255,49 @@ func (s *OrderService) GetOrderItems(ctx context.Context, orderID int64) ([]Orde
 			OrderID:        order.OrderID,
 			Quantity:       order.Quantity,
 			UnitPriceCents: order.UnitPriceCents,
+			ProductName:    order.ProductName,
 		})
 	}
 	return orders, nil
+}
+
+type OrderDetails struct {
+	ID         int64
+	Status     string
+	CreatedAt  time.Time
+	TotalCents int32
+	items      []OrderItemDetails
+}
+
+func (s *OrderService) GetOrder(ctx context.Context, orderID int64) (*OrderDetails, error) {
+	res, err := s.queries.GetOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if len(res) == 0 {
+		return nil, fmt.Errorf("order not found")
+	}
+	order := OrderDetails{}
+	order.ID = res[0].ID
+	order.Status = res[0].Status
+	order.TotalCents = res[0].TotalCents
+
+	var createdAt time.Time
+	err = res[0].CreatedAt.Scan(&createdAt)
+	if err != nil {
+		return nil, err
+	}
+	order.CreatedAt = createdAt
+	order.items = []OrderItemDetails{}
+	for _, item := range res {
+		order.items = append(order.items, OrderItemDetails{
+			ID:             item.ID_2,
+			ProductID:      item.ProductID,
+			OrderID:        item.OrderID,
+			Quantity:       item.Quantity,
+			UnitPriceCents: item.UnitPriceCents,
+			ProductName:    item.Name,
+		})
+	}
+	return &order, nil
 }
