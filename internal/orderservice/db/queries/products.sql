@@ -7,5 +7,8 @@ INSERT INTO products (name, price_cents, description) VALUES ($1, $2, $3) RETURN
 -- name: GetProducts :many
 SELECT * FROM products;
 
--- name: AddProductStock :one
+-- name: InsertInventory :one
 INSERT INTO inventory (product_id, stock_count) VALUES ($1, $2) RETURNING *;
+
+-- name: IncreaseProductStock :one
+UPDATE inventory SET stock_count = inventory.stock_count + $2 WHERE product_id = $1 RETURNING *;

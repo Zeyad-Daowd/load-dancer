@@ -3,11 +3,13 @@ package orderservice
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	db "github.com/zeyad-daowd/load-dancer/internal/orderservice/db/generated"
 )
 
 type OrderService struct {
-	queries *db.Queries
+	queries    *db.Queries
+	connection *pgx.Conn
 }
 
 type CreateOrderRequest struct {
