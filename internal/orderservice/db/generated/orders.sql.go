@@ -34,23 +34,21 @@ func (q *Queries) AddOrder(ctx context.Context, arg AddOrderParams) (Order, erro
 }
 
 const addProductOrderItem = `-- name: AddProductOrderItem :one
-INSERT INTO order_items (product_id, order_id, quantity, unit_price_cents) VALUES ($1, $2, $3, $4) RETURNING id, product_id, order_id, quantity, unit_price_cents
+INSERT INTO order_items (product_id, order_id, quantity, unit_price_cents)
+    SELECT $1, $2, $3, price_cents
+    FROM products
+    WHERE id = $1
+    RETURNING id, product_id, order_id, quantity, unit_price_cents
 `
 
 type AddProductOrderItemParams struct {
-	ProductID      int32
-	OrderID        int64
-	Quantity       int32
-	UnitPriceCents int32
+	ProductID int32
+	OrderID   int64
+	Quantity  int32
 }
 
 func (q *Queries) AddProductOrderItem(ctx context.Context, arg AddProductOrderItemParams) (OrderItem, error) {
-	row := q.db.QueryRow(ctx, addProductOrderItem,
-		arg.ProductID,
-		arg.OrderID,
-		arg.Quantity,
-		arg.UnitPriceCents,
-	)
+	row := q.db.QueryRow(ctx, addProductOrderItem, arg.ProductID, arg.OrderID, arg.Quantity)
 	var i OrderItem
 	err := row.Scan(
 		&i.ID,
@@ -59,6 +57,22 @@ func (q *Queries) AddProductOrderItem(ctx context.Context, arg AddProductOrderIt
 		&i.Quantity,
 		&i.UnitPriceCents,
 	)
+	return i, err
+}
+
+const decreaseInventoryStock = `-- name: DecreaseInventoryStock :one
+UPDATE inventory SET stock_count = stock_count - $2 WHERE product_id = $1 RETURNING product_id, stock_count
+`
+
+type DecreaseInventoryStockParams struct {
+	ProductID  int32
+	StockCount int32
+}
+
+func (q *Queries) DecreaseInventoryStock(ctx context.Context, arg DecreaseInventoryStockParams) (Inventory, error) {
+	row := q.db.QueryRow(ctx, decreaseInventoryStock, arg.ProductID, arg.StockCount)
+	var i Inventory
+	err := row.Scan(&i.ProductID, &i.StockCount)
 	return i, err
 }
 
@@ -117,19 +131,36 @@ func (q *Queries) GetCheckoutItems(ctx context.Context, orderID int64) ([]GetChe
 	return items, nil
 }
 
-const updateInventoryStock = `-- name: UpdateInventoryStock :one
-UPDATE inventory SET stock_count = stock_count - $2 WHERE product_id = $1 RETURNING product_id, stock_count
+const getOrderStatus = `-- name: GetOrderStatus :one
+SELECT status from orders WHERE id = $1
 `
 
-type UpdateInventoryStockParams struct {
-	ProductID  int32
-	StockCount int32
+func (q *Queries) GetOrderStatus(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRow(ctx, getOrderStatus, id)
+	var status string
+	err := row.Scan(&status)
+	return status, err
 }
 
-func (q *Queries) UpdateInventoryStock(ctx context.Context, arg UpdateInventoryStockParams) (Inventory, error) {
-	row := q.db.QueryRow(ctx, updateInventoryStock, arg.ProductID, arg.StockCount)
-	var i Inventory
-	err := row.Scan(&i.ProductID, &i.StockCount)
+const removeProductQuantityOrderItem = `-- name: RemoveProductQuantityOrderItem :one
+DELETE FROM order_items WHERE product_id = $1 AND order_id = $2 RETURNING id, product_id, order_id, quantity, unit_price_cents
+`
+
+type RemoveProductQuantityOrderItemParams struct {
+	ProductID int32
+	OrderID   int64
+}
+
+func (q *Queries) RemoveProductQuantityOrderItem(ctx context.Context, arg RemoveProductQuantityOrderItemParams) (OrderItem, error) {
+	row := q.db.QueryRow(ctx, removeProductQuantityOrderItem, arg.ProductID, arg.OrderID)
+	var i OrderItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProductID,
+		&i.OrderID,
+		&i.Quantity,
+		&i.UnitPriceCents,
+	)
 	return i, err
 }
 
@@ -149,4 +180,19 @@ func (q *Queries) UpdateOrderStatus(ctx context.Context, id int64) (Order, error
 		&i.TotalCents,
 	)
 	return i, err
+}
+
+const updateOrderTotal = `-- name: UpdateOrderTotal :exec
+UPDATE orders
+    SET total_cents = (
+        SELECT COALESCE(SUM(quantity * unit_price_cents), 0)
+        FROM order_items
+        WHERE order_id = $1
+    )
+    WHERE id = $1
+`
+
+func (q *Queries) UpdateOrderTotal(ctx context.Context, orderID int64) error {
+	_, err := q.db.Exec(ctx, updateOrderTotal, orderID)
+	return err
 }

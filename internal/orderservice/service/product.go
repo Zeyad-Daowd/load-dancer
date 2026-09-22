@@ -34,7 +34,7 @@ func (s *OrderService) AddProduct(ctx context.Context, req *AddProductRequest) (
 		slog.Warn("cannot add negative inventory")
 		return nil, fmt.Errorf("cannot add negative inventory")
 	}
-	tx, err := s.connection.Begin(ctx)
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
