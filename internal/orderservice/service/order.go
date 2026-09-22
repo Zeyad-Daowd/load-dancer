@@ -46,7 +46,7 @@ type AddProductOrderItemRequest struct {
 
 func (s *OrderService) AddOrderItem(ctx context.Context, req *AddProductOrderItemRequest) (*db.OrderItem, error) {
 	if req.Quantity <= 0 {
-		slog.Info("quantity must be postive", "quantity", req.Quantity)
+		slog.Info("quantity must be positive", "quantity", req.Quantity)
 		return nil, fmt.Errorf("quantity must be positive")
 	}
 	tx, err := s.pool.Begin(ctx)
