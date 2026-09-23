@@ -16,7 +16,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		h.handleError(w, ErrInvalidRequest)
 		return
 	}
 

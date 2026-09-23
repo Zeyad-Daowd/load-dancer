@@ -73,6 +73,10 @@ func (s *OrderService) AddProduct(ctx context.Context, req *AddProductRequest) (
 }
 
 func (s *OrderService) IncreaseProductStock(ctx context.Context, productID int32, stockCount int32) (*StockCount, error) {
+	if stockCount <= 0 {
+		slog.Warn("cannot increase stock by non-positive value")
+		return nil, fmt.Errorf("cannot increase stock by non-positive value")
+	}
 	updatedInventory, err := s.queries.IncreaseProductStock(ctx, db.IncreaseProductStockParams{
 		ProductID:  productID,
 		StockCount: stockCount,

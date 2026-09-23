@@ -57,7 +57,11 @@ func main() {
 	h := handler.NewOrderServiceHandler(logger, orderService, parsedURL.String())
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.HealthCheck)
-	mux.HandleFunc("POST /users", h.CreateUser)
+	mux.HandleFunc("POST /users", h.CreateUser) //admin auth later
+	mux.HandleFunc("GET /products", h.GetProducts)
+	mux.HandleFunc("POST /products", h.AddProduct)                      //admin auth later
+	mux.HandleFunc("GET /products/{id}/stock", h.GetStock)              //admin auth later
+	mux.HandleFunc("POST /products/{id}/stock", h.IncreaseProductStock) //admin auth later
 	srv := &http.Server{
 		Addr:              parsedURL.Host,
 		Handler:           mux,

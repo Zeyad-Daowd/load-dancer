@@ -3,17 +3,24 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	service "github.com/zeyad-daowd/load-dancer/internal/orderservice/service"
 )
 
+var ErrInvalidRequest = fmt.Errorf("invalid request")
+
+var ErrInvalidPath = fmt.Errorf("invalid path")
+
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrInvalidRequest):
+		writeError(w, http.StatusBadRequest, "invalid request")
 	case errors.Is(err, service.ErrNotFound):
 		writeError(w, http.StatusNotFound, "user not found")
-	case errors.Is(err, service.ErrInvalidRequest):
-		writeError(w, http.StatusBadRequest, "invalid request")
+	case errors.Is(err, service.ErrInvalidCreateUserRequest):
+		writeError(w, http.StatusBadRequest, "invalid create user request")
 	default:
 		h.logger.Error("unhandled error", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")

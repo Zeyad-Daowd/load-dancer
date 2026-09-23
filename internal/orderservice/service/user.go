@@ -33,14 +33,14 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-var ErrInvalidRequest = fmt.Errorf("invalid request")
+var ErrInvalidCreateUserRequest = fmt.Errorf("invalid create user request")
 
 func (s *OrderService) CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
 	if req.Role != "admin" && req.Role != "user" {
-		return nil, fmt.Errorf("Invalid User Role")
+		return nil, ErrInvalidCreateUserRequest
 	}
 	if req.Username == "" || req.Password == "" {
-		return nil, ErrInvalidRequest
+		return nil, ErrInvalidCreateUserRequest
 	}
 	hashed, err := HashPassword(req.Password)
 	if err != nil {
