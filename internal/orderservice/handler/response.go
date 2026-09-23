@@ -12,11 +12,14 @@ import (
 var ErrInvalidRequest = fmt.Errorf("invalid request")
 
 var ErrInvalidPath = fmt.Errorf("invalid path")
+var ErrMissingIdempotencyKey = fmt.Errorf("missing idempotency key")
 
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidRequest):
 		writeError(w, http.StatusBadRequest, "invalid request")
+	case errors.Is(err, ErrMissingIdempotencyKey):
+		writeError(w, http.StatusBadRequest, "missing idempotency key")
 	case errors.Is(err, service.ErrNotFound):
 		writeError(w, http.StatusNotFound, "user not found")
 	case errors.Is(err, service.ErrInvalidCreateUserRequest):

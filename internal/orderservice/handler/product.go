@@ -45,7 +45,7 @@ func (h *Handler) GetProducts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetStock(w http.ResponseWriter, r *http.Request) {
-	productId, err := h.getIntFromPath(r, "id")
+	productId, err := h.getInt32FromPath(r, "id")
 	if err != nil {
 		h.handleError(w, ErrInvalidRequest)
 		return
@@ -64,7 +64,7 @@ type IncreaseProductStockRequest struct {
 
 func (h *Handler) IncreaseProductStock(w http.ResponseWriter, r *http.Request) {
 	var req IncreaseProductStockRequest
-	productID, err := h.getIntFromPath(r, "id")
+	productID, err := h.getInt32FromPath(r, "id")
 	if err != nil {
 		h.handleError(w, err)
 		return

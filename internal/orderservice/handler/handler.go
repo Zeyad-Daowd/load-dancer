@@ -23,12 +23,20 @@ func NewOrderServiceHandler(logger *slog.Logger, service *service.OrderService, 
 	return Handler
 }
 
-func (h *Handler) getIntFromPath(r *http.Request, paramName string) (int32, error) {
-	id := r.PathValue(paramName)
-	idInt, err := strconv.Atoi(id)
+func (h *Handler) getInt64FromPath(r *http.Request, paramName string) (int64, error) {
+	val := r.PathValue(paramName)
+	valInt, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
-		h.logger.Error("invalid path parameter", "param", paramName, "value", id, "error", err)
+		h.logger.Error("invalid path parameter", "param", paramName, "value", val, "error", err)
 		return 0, ErrInvalidPath
 	}
-	return int32(idInt), nil
+	return valInt, nil
+}
+
+func (h *Handler) getInt32FromPath(r *http.Request, paramName string) (int32, error) {
+	valInt64, err := h.getInt64FromPath(r, paramName)
+	if err != nil {
+		return 0, err
+	}
+	return int32(valInt64), nil
 }
