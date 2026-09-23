@@ -33,11 +33,15 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
+var ErrInvalidRequest = fmt.Errorf("invalid request")
+
 func (s *OrderService) CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
 	if req.Role != "admin" && req.Role != "user" {
 		return nil, fmt.Errorf("Invalid User Role")
 	}
-
+	if req.Username == "" || req.Password == "" {
+		return nil, ErrInvalidRequest
+	}
 	hashed, err := HashPassword(req.Password)
 	if err != nil {
 		return nil, err
@@ -59,10 +63,12 @@ func (s *OrderService) CreateUser(ctx context.Context, req *CreateUserRequest) (
 	}, nil
 }
 
+var ErrNotFound = fmt.Errorf("user not found")
+
 func (s *OrderService) GetUserByUsername(ctx context.Context, username string) (*User, error) {
 	user, err := s.queries.GetUserByUsername(ctx, username)
 	if err != nil {
-		return nil, err
+		return nil, ErrNotFound
 	}
 
 	return &User{
