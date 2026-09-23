@@ -2,10 +2,12 @@ package orderservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/zeyad-daowd/load-dancer/internal/orderservice/db/generated"
 )
@@ -27,11 +29,23 @@ func NewOrderService(queries *db.Queries, pool *pgxpool.Pool) *OrderService {
 	}
 }
 
-func (s *OrderService) CreateOrder(ctx context.Context, req *CreateOrderRequest) (*db.AddOrderRow, error) {
+func (s *OrderService) CreateOrder(ctx context.Context, req *CreateOrderRequest) (*db.Order, error) {
+
 	createdOrder, err := s.queries.AddOrder(ctx, db.AddOrderParams{
 		UserID:         req.UserID,
 		IdempotencyKey: req.IdempotencyKey,
 		TotalCents:     0,
+	})
+	if err == nil {
+		return &createdOrder, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	createdOrder, err = s.queries.GetOrderByUserIdAndIdempotencyKey(ctx, db.GetOrderByUserIdAndIdempotencyKeyParams{
+		UserID:         req.UserID,
+		IdempotencyKey: req.IdempotencyKey,
 	})
 	if err != nil {
 		return nil, err

@@ -1,15 +1,12 @@
 -- name: AddOrder :one
-WITH inserted as (
-    INSERT INTO orders (user_id, idempotency_key, total_cents) VALUES ($1, $2, $3)
-    ON CONFLICT (user_id, idempotency_key)
-    DO NOTHING
-    RETURNING *
-)
-SELECT * FROM inserted
-UNION ALL
+INSERT INTO orders (user_id, idempotency_key, total_cents) VALUES ($1, $2, $3)
+ON CONFLICT (user_id, idempotency_key)
+DO NOTHING 
+RETURNING *;
+
+-- name: GetOrderByUserIdAndIdempotencyKey :one
 SELECT * FROM orders 
-WHERE user_id = $1 AND idempotency_key = $2
-AND NOT EXISTS (SELECT 1 FROM inserted);
+WHERE user_id = $1 AND idempotency_key = $2;
 
 
 -- name: AddProductOrderItem :one
