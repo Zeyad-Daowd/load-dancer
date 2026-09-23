@@ -27,7 +27,7 @@ func NewOrderService(queries *db.Queries, pool *pgxpool.Pool) *OrderService {
 	}
 }
 
-func (s *OrderService) CreateOrder(ctx context.Context, req *CreateOrderRequest) (*db.Order, error) {
+func (s *OrderService) CreateOrder(ctx context.Context, req *CreateOrderRequest) (*db.AddOrderRow, error) {
 	createdOrder, err := s.queries.AddOrder(ctx, db.AddOrderParams{
 		UserID:         req.UserID,
 		IdempotencyKey: req.IdempotencyKey,

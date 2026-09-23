@@ -12,7 +12,17 @@ import (
 )
 
 const addOrder = `-- name: AddOrder :one
-INSERT INTO orders (user_id, idempotency_key, total_cents) VALUES ($1, $2, $3) RETURNING id, user_id, status, created_at, idempotency_key, total_cents
+WITH inserted as (
+    INSERT INTO orders (user_id, idempotency_key, total_cents) VALUES ($1, $2, $3)
+    ON CONFLICT (user_id, idempotency_key)
+    DO NOTHING
+    RETURNING id, user_id, status, created_at, idempotency_key, total_cents
+)
+SELECT id, user_id, status, created_at, idempotency_key, total_cents FROM inserted
+UNION ALL
+SELECT id, user_id, status, created_at, idempotency_key, total_cents FROM orders 
+WHERE user_id = $1 AND idempotency_key = $2
+AND NOT EXISTS (SELECT 1 FROM inserted)
 `
 
 type AddOrderParams struct {
@@ -21,9 +31,18 @@ type AddOrderParams struct {
 	TotalCents     int32
 }
 
-func (q *Queries) AddOrder(ctx context.Context, arg AddOrderParams) (Order, error) {
+type AddOrderRow struct {
+	ID             int64
+	UserID         int32
+	Status         string
+	CreatedAt      pgtype.Timestamp
+	IdempotencyKey string
+	TotalCents     int32
+}
+
+func (q *Queries) AddOrder(ctx context.Context, arg AddOrderParams) (AddOrderRow, error) {
 	row := q.db.QueryRow(ctx, addOrder, arg.UserID, arg.IdempotencyKey, arg.TotalCents)
-	var i Order
+	var i AddOrderRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
