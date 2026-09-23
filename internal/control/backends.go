@@ -89,10 +89,6 @@ func (bc *BackendController) addBackendHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
 		w.WriteHeader(http.StatusCreated)
 	}
 }
