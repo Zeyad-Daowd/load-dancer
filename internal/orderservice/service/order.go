@@ -39,13 +39,13 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *CreateOrderRequest)
 	return &createdOrder, nil
 }
 
-type AddProductOrderItemRequest struct {
+type AddOrderItemRequest struct {
 	ProductID int32
 	OrderID   int64
 	Quantity  int32
 }
 
-func (s *OrderService) AddOrderItem(ctx context.Context, req *AddProductOrderItemRequest) (*db.OrderItem, error) {
+func (s *OrderService) AddOrderItem(ctx context.Context, req *AddOrderItemRequest) (*db.OrderItem, error) {
 	if req.Quantity <= 0 {
 		slog.Info("quantity must be positive", "quantity", req.Quantity)
 		return nil, fmt.Errorf("quantity must be positive")
@@ -217,16 +217,11 @@ func (s *OrderService) GetUserOrders(ctx context.Context, userID int32) ([]Order
 		return nil, err
 	}
 	orders := []Order{}
-	var createdAt time.Time
 	for _, order := range res {
-		err := order.CreatedAt.Scan(&createdAt)
-		if err != nil {
-			return nil, err
-		}
 		orders = append(orders, Order{
 			ID:         order.ID,
 			Status:     order.Status,
-			CreatedAt:  createdAt,
+			CreatedAt:  order.CreatedAt.Time,
 			TotalCents: order.TotalCents,
 		})
 	}
@@ -264,7 +259,7 @@ type OrderDetails struct {
 	Status     string
 	CreatedAt  time.Time
 	TotalCents int32
-	items      []OrderItemDetails
+	Items      []OrderItemDetails
 }
 
 func (s *OrderService) GetOrder(ctx context.Context, orderID int64) (*OrderDetails, error) {
@@ -280,15 +275,10 @@ func (s *OrderService) GetOrder(ctx context.Context, orderID int64) (*OrderDetai
 	order.Status = res[0].Status
 	order.TotalCents = res[0].TotalCents
 
-	var createdAt time.Time
-	err = res[0].CreatedAt.Scan(&createdAt)
-	if err != nil {
-		return nil, err
-	}
-	order.CreatedAt = createdAt
-	order.items = []OrderItemDetails{}
+	order.CreatedAt = res[0].CreatedAt.Time
+	order.Items = []OrderItemDetails{}
 	for _, item := range res {
-		order.items = append(order.items, OrderItemDetails{
+		order.Items = append(order.Items, OrderItemDetails{
 			ProductID:      item.ProductID,
 			OrderID:        item.OrderID,
 			Quantity:       item.Quantity,
