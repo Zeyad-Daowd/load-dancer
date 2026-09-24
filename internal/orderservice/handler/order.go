@@ -89,7 +89,7 @@ func (h *Handler) EditOrderItem(w http.ResponseWriter, r *http.Request) {
 		h.handleError(w, ErrInvalidRequest)
 		return
 	}
-	orderItem, err := h.service.EditOrderItemQuantity(r.Context(), &service.EditProductOrderQuantityRequest{
+	orderItem, err := h.service.EditOrderItemQuantity(r.Context(), &service.EditOrderItemQuantityRequest{
 		ProductID: productID,
 		OrderID:   orderID,
 		Quantity:  req.Quantity,

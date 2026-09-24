@@ -99,13 +99,13 @@ func (s *OrderService) AddOrderItem(ctx context.Context, req *AddOrderItemReques
 	return &createdOrder, nil
 }
 
-type EditProductOrderQuantityRequest struct {
+type EditOrderItemQuantityRequest struct {
 	ProductID int32
 	OrderID   int64
 	Quantity  int32
 }
 
-func (s *OrderService) EditOrderItemQuantity(ctx context.Context, req *EditProductOrderQuantityRequest) (*db.OrderItem, error) {
+func (s *OrderService) EditOrderItemQuantity(ctx context.Context, req *EditOrderItemQuantityRequest) (*db.OrderItem, error) {
 	if req.Quantity < 0 {
 		slog.Error("quantity cannot be negative")
 		return nil, fmt.Errorf("quantity cannot be negative")
