@@ -166,6 +166,8 @@ func (s *OrderService) EditOrderItemQuantity(ctx context.Context, req *EditOrder
 	return &editedOrder, nil
 }
 
+var ErrInsufficientStock = fmt.Errorf("insufficient stock for product")
+
 func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Order, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -194,7 +196,9 @@ func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Or
 	for _, item := range orderItems {
 		if item.RequestedQuantity > item.AvailableStock {
 			slog.Info("insufficient stock for product", "product_id", item.ProductID)
-			return nil, fmt.Errorf("insufficient stock for product %d", item.ProductID)
+			err := ErrInsufficientStock
+			err = fmt.Errorf("%w: product_id %d", err, item.ProductID)
+			return nil, err
 		}
 		_, err := txQueries.DecreaseInventoryStock(ctx, db.DecreaseInventoryStockParams{
 			ProductID:  item.ProductID,
