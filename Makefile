@@ -1,8 +1,14 @@
+include .env
+export
+
 PORTS = 8001 8002 8003
 
 LSOF_ARGS = $(foreach port,$(PORTS),-i:$(port))
 
-.PHONY: start-backends stop-backends clean
+.PHONY: start-backends stop-backends clean test
+
+test:
+	go test -race -v ./...
 
 start-backends: clean
 	@for port in $(PORTS); do \
