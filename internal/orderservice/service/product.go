@@ -29,10 +29,12 @@ type StockCount struct {
 	StockCount int32
 }
 
+var ErrInvalidProductInventory = fmt.Errorf("invalid product inventory, must be non-negative")
+
 func (s *OrderService) AddProduct(ctx context.Context, req *AddProductRequest) (*Product, error) {
 	if req.Inventory < 0 {
 		slog.Warn("cannot add negative inventory")
-		return nil, fmt.Errorf("cannot add negative inventory")
+		return nil, ErrInvalidProductInventory
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -72,10 +74,12 @@ func (s *OrderService) AddProduct(ctx context.Context, req *AddProductRequest) (
 	return &product, nil
 }
 
+var ErrIncreaseStockNotPositive = fmt.Errorf("cannot increase stock by non-positive value")
+
 func (s *OrderService) IncreaseProductStock(ctx context.Context, productID int32, stockCount int32) (*StockCount, error) {
 	if stockCount <= 0 {
 		slog.Warn("cannot increase stock by non-positive value")
-		return nil, fmt.Errorf("cannot increase stock by non-positive value")
+		return nil, ErrIncreaseStockNotPositive
 	}
 	updatedInventory, err := s.queries.IncreaseProductStock(ctx, db.IncreaseProductStockParams{
 		ProductID:  productID,

@@ -59,10 +59,12 @@ type AddOrderItemRequest struct {
 	Quantity  int32
 }
 
+var ErrInvalidItemQuantity = fmt.Errorf("invalid item quantity, must be positive")
+
 func (s *OrderService) AddOrderItem(ctx context.Context, req *AddOrderItemRequest) (*db.OrderItem, error) {
 	if req.Quantity <= 0 {
 		slog.Info("quantity must be positive", "quantity", req.Quantity)
-		return nil, fmt.Errorf("quantity must be positive")
+		return nil, ErrInvalidItemQuantity
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -78,7 +80,7 @@ func (s *OrderService) AddOrderItem(ctx context.Context, req *AddOrderItemReques
 	}
 	if orderStatus != "started" {
 		slog.Info("cannot edit an order that is not in started state", "order_id", req.OrderID, "status", orderStatus)
-		return nil, fmt.Errorf("cannot edit an order that is not in started state")
+		return nil, ErrCannotEditNotStartedOrder
 	}
 	createdOrder, err := txQueries.AddProductOrderItem(ctx, db.AddProductOrderItemParams{
 		ProductID: req.ProductID,
@@ -105,10 +107,12 @@ type EditOrderItemQuantityRequest struct {
 	Quantity  int32
 }
 
+var ErrCannotEditNotStartedOrder = fmt.Errorf("cannot edit order item, order is not in started state")
+
 func (s *OrderService) EditOrderItemQuantity(ctx context.Context, req *EditOrderItemQuantityRequest) (*db.OrderItem, error) {
 	if req.Quantity < 0 {
 		slog.Error("quantity cannot be negative")
-		return nil, fmt.Errorf("quantity cannot be negative")
+		return nil, ErrInvalidItemQuantity
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -124,7 +128,7 @@ func (s *OrderService) EditOrderItemQuantity(ctx context.Context, req *EditOrder
 	}
 	if orderStatus != "started" {
 		slog.Info("cannot edit an order that is not in started state", "order_id", req.OrderID, "status", orderStatus)
-		return nil, fmt.Errorf("cannot edit an order that is not in started state")
+		return nil, ErrCannotEditNotStartedOrder
 	}
 
 	if req.Quantity == 0 {
@@ -167,6 +171,8 @@ func (s *OrderService) EditOrderItemQuantity(ctx context.Context, req *EditOrder
 }
 
 var ErrInsufficientStock = fmt.Errorf("insufficient stock for product")
+var ErrCannotCheckoutEmptyOrder = fmt.Errorf("cannot checkout empty order")
+var ErrCannoutCheckoutOrder = fmt.Errorf("cannot checkout order that is not in started state")
 
 func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Order, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -183,7 +189,7 @@ func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Or
 	}
 	if orderStatus != "started" {
 		slog.Info("cannot checkout an order that is not in started state", "order_id", orderID, "status", orderStatus)
-		return nil, fmt.Errorf("cannot checkout an order that is not in started state")
+		return nil, ErrCannoutCheckoutOrder
 	}
 	orderItems, err := txQueries.GetCheckoutItems(ctx, orderID)
 	if err != nil {
@@ -191,7 +197,7 @@ func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Or
 	}
 
 	if len(orderItems) == 0 {
-		return nil, fmt.Errorf("cannot checkout an empty order")
+		return nil, ErrCannotCheckoutEmptyOrder
 	}
 	for _, item := range orderItems {
 		if item.RequestedQuantity > item.AvailableStock {
@@ -280,13 +286,15 @@ type OrderDetails struct {
 	Items      []OrderItemDetails
 }
 
+var ErrOrderNotFound = fmt.Errorf("order not found")
+
 func (s *OrderService) GetOrder(ctx context.Context, orderID int64) (*OrderDetails, error) {
 	res, err := s.queries.GetOrder(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
 	if len(res) == 0 {
-		return nil, fmt.Errorf("order not found")
+		return nil, ErrOrderNotFound
 	}
 	order := OrderDetails{}
 	order.ID = res[0].ID
