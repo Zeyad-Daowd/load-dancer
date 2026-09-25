@@ -172,7 +172,7 @@ func (s *OrderService) EditOrderItemQuantity(ctx context.Context, req *EditOrder
 
 var ErrInsufficientStock = fmt.Errorf("insufficient stock for product")
 var ErrCannotCheckoutEmptyOrder = fmt.Errorf("cannot checkout empty order")
-var ErrCannoutCheckoutOrder = fmt.Errorf("cannot checkout order that is not in started state")
+var ErrCannotCheckoutOrder = fmt.Errorf("cannot checkout order that is not in started state")
 
 func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Order, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -189,7 +189,7 @@ func (s *OrderService) CheckoutOrder(ctx context.Context, orderID int64) (*db.Or
 	}
 	if orderStatus != "started" {
 		slog.Info("cannot checkout an order that is not in started state", "order_id", orderID, "status", orderStatus)
-		return nil, ErrCannoutCheckoutOrder
+		return nil, ErrCannotCheckoutOrder
 	}
 	orderItems, err := txQueries.GetCheckoutItems(ctx, orderID)
 	if err != nil {

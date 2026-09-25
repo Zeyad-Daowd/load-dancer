@@ -40,7 +40,7 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "user not found")
 	case errors.Is(err, service.ErrInvalidCreateUserRequest):
 		writeError(w, http.StatusBadRequest, "invalid create user request")
-	case errors.Is(err, service.ErrCannoutCheckoutOrder):
+	case errors.Is(err, service.ErrCannotCheckoutOrder):
 		writeError(w, http.StatusConflict, "cannot checkout order that is not in started state")
 	case errors.Is(err, service.ErrInsufficientStock):
 		writeError(w, http.StatusConflict, "insufficient stock for product")
