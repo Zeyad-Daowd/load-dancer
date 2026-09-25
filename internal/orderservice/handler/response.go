@@ -36,7 +36,7 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "invalid request")
 	case errors.Is(err, ErrMissingIdempotencyKey):
 		writeError(w, http.StatusBadRequest, "missing idempotency key")
-	case errors.Is(err, service.ErrNotFound):
+	case errors.Is(err, service.ErrUserNotFound):
 		writeError(w, http.StatusNotFound, "user not found")
 	case errors.Is(err, service.ErrInvalidCreateUserRequest):
 		writeError(w, http.StatusBadRequest, "invalid create user request")

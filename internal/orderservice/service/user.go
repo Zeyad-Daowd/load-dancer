@@ -63,12 +63,12 @@ func (s *OrderService) CreateUser(ctx context.Context, req *CreateUserRequest) (
 	}, nil
 }
 
-var ErrNotFound = fmt.Errorf("user not found")
+var ErrUserNotFound = fmt.Errorf("user not found")
 
 func (s *OrderService) GetUserByUsername(ctx context.Context, username string) (*User, error) {
 	user, err := s.queries.GetUserByUsername(ctx, username)
 	if err != nil {
-		return nil, ErrNotFound
+		return nil, ErrUserNotFound
 	}
 
 	return &User{
