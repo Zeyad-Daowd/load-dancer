@@ -115,6 +115,12 @@ const (
 	SortPriceDesc = "price_desc"
 )
 
+func nullableInt(value *int32) pgtype.Int4 {
+	if value == nil {
+		return pgtype.Int4{Valid: false}
+	}
+	return pgtype.Int4{Int32: *value, Valid: true}
+}
 func (s *OrderService) GetProducts(ctx context.Context, filter GetProductsFilter) ([]ProductItem, error) {
 	if filter.Page <= 0 {
 		filter.Page = 1
@@ -130,28 +136,35 @@ func (s *OrderService) GetProducts(ctx context.Context, filter GetProductsFilter
 	}
 	var res []db.Product
 	var err error
+	fmt.Printf("constructed filter: %+v\n", db.GetProductsParams{
+		CategoryID:     nullableInt(filter.CategoryID),
+		MinPrice:       nullableInt(filter.MinPriceCents),
+		MaxPrice:       nullableInt(filter.MaxPriceCents),
+		LimitProducts:  int32(filter.Limit),
+		OffsetProducts: int32((filter.Page - 1) * filter.Limit),
+	})
 	switch filter.Sort {
 	case SortPriceAsc:
 		res, err = s.queries.GetProductsSortedByPriceAsc(ctx, db.GetProductsSortedByPriceAscParams{
-			CategoryID:     filter.CategoryID,
-			MinPrice:       filter.MinPriceCents,
-			MaxPrice:       filter.MaxPriceCents,
+			CategoryID:     nullableInt(filter.CategoryID),
+			MinPrice:       nullableInt(filter.MinPriceCents),
+			MaxPrice:       nullableInt(filter.MaxPriceCents),
 			LimitProducts:  int32(filter.Limit),
 			OffsetProducts: int32((filter.Page - 1) * filter.Limit),
 		})
 	case SortPriceDesc:
 		res, err = s.queries.GetProductsSortedByPriceDesc(ctx, db.GetProductsSortedByPriceDescParams{
-			CategoryID:     filter.CategoryID,
-			MinPrice:       filter.MinPriceCents,
-			MaxPrice:       filter.MaxPriceCents,
+			CategoryID:     nullableInt(filter.CategoryID),
+			MinPrice:       nullableInt(filter.MinPriceCents),
+			MaxPrice:       nullableInt(filter.MaxPriceCents),
 			LimitProducts:  int32(filter.Limit),
 			OffsetProducts: int32((filter.Page - 1) * filter.Limit),
 		})
 	default:
 		res, err = s.queries.GetProducts(ctx, db.GetProductsParams{
-			CategoryID:     filter.CategoryID,
-			MinPrice:       filter.MinPriceCents,
-			MaxPrice:       filter.MaxPriceCents,
+			CategoryID:     nullableInt(filter.CategoryID),
+			MinPrice:       nullableInt(filter.MinPriceCents),
+			MaxPrice:       nullableInt(filter.MaxPriceCents),
 			LimitProducts:  int32(filter.Limit),
 			OffsetProducts: int32((filter.Page - 1) * filter.Limit),
 		})

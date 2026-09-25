@@ -50,7 +50,7 @@ func main() {
 	}
 	defer pool.Close()
 	queries := db.New(pool)
-	fmt.Println("Connected to database successfully:", cfg.DatabaseURL, queries)
+	fmt.Println("Connected to database successfully")
 	// nil causes slog to log from INFO level and above
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	orderService := service.NewOrderService(queries, pool)

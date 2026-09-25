@@ -45,11 +45,10 @@ func (h *Handler) AddProductCategory(w http.ResponseWriter, r *http.Request) {
 
 	categoryID := req.CategoryID
 
-	err = h.service.AddProductCategory(r.Context(), productID, categoryID)
+	resp, err := h.service.AddProductCategory(r.Context(), productID, categoryID)
 	if err != nil {
 		h.handleError(w, err)
 		return
 	}
-
-	writeJSON(w, http.StatusCreated, nil)
+	writeJSON(w, http.StatusCreated, resp)
 }

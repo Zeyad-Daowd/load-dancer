@@ -51,16 +51,16 @@ func (q *Queries) GetProduct(ctx context.Context, id int32) (Product, error) {
 
 const getProducts = `-- name: GetProducts :many
 SELECT id, name, price_cents, description FROM products
-WHERE ($1 IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
-AND ($2 IS NULL or price_cents >= $2)
-AND ($3 IS NULL or price_cents <= $3)
+WHERE ($1::int IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
+AND ($2::int IS NULL or price_cents >= $2)
+AND ($3::int IS NULL or price_cents <= $3)
 LIMIT $5 OFFSET $4
 `
 
 type GetProductsParams struct {
-	CategoryID     interface{}
-	MinPrice       interface{}
-	MaxPrice       interface{}
+	CategoryID     pgtype.Int4
+	MinPrice       pgtype.Int4
+	MaxPrice       pgtype.Int4
 	OffsetProducts int32
 	LimitProducts  int32
 }
@@ -98,17 +98,17 @@ func (q *Queries) GetProducts(ctx context.Context, arg GetProductsParams) ([]Pro
 
 const getProductsSortedByPriceAsc = `-- name: GetProductsSortedByPriceAsc :many
 SELECT id, name, price_cents, description FROM products
-WHERE ($1 IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
-AND ($2 IS NULL or price_cents >= $2)
-AND ($3 IS NULL or price_cents <= $3)
+WHERE ($1::int IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
+AND ($2::int IS NULL or price_cents >= $2)
+AND ($3::int IS NULL or price_cents <= $3)
 ORDER BY price_cents ASC, id ASC
 LIMIT $5 OFFSET $4
 `
 
 type GetProductsSortedByPriceAscParams struct {
-	CategoryID     interface{}
-	MinPrice       interface{}
-	MaxPrice       interface{}
+	CategoryID     pgtype.Int4
+	MinPrice       pgtype.Int4
+	MaxPrice       pgtype.Int4
 	OffsetProducts int32
 	LimitProducts  int32
 }
@@ -146,17 +146,17 @@ func (q *Queries) GetProductsSortedByPriceAsc(ctx context.Context, arg GetProduc
 
 const getProductsSortedByPriceDesc = `-- name: GetProductsSortedByPriceDesc :many
 SELECT id, name, price_cents, description FROM products
-WHERE ($1 IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
-AND ($2 IS NULL or price_cents >= $2)
-AND ($3 IS NULL or price_cents <= $3)
+WHERE ($1::int IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
+AND ($2::int IS NULL or price_cents >= $2)
+AND ($3::int IS NULL or price_cents <= $3)
 ORDER BY price_cents DESC, id ASC
 LIMIT $5 OFFSET $4
 `
 
 type GetProductsSortedByPriceDescParams struct {
-	CategoryID     interface{}
-	MinPrice       interface{}
-	MaxPrice       interface{}
+	CategoryID     pgtype.Int4
+	MinPrice       pgtype.Int4
+	MaxPrice       pgtype.Int4
 	OffsetProducts int32
 	LimitProducts  int32
 }

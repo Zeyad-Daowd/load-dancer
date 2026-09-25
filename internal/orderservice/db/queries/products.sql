@@ -6,24 +6,24 @@ INSERT INTO products (name, price_cents, description) VALUES ($1, $2, $3) RETURN
 
 -- name: GetProducts :many
 SELECT * FROM products
-WHERE (sqlc.narg(category_id) IS NULL or EXISTS (select 1 from product_categories where category_id = sqlc.narg(category_id) and product_id = products.id))
-AND (sqlc.narg(min_price) IS NULL or price_cents >= sqlc.narg(min_price))
-AND (sqlc.narg(max_price) IS NULL or price_cents <= sqlc.narg(max_price))
+WHERE (sqlc.narg(category_id)::int IS NULL or EXISTS (select 1 from product_categories where category_id = sqlc.narg(category_id) and product_id = products.id))
+AND (sqlc.narg(min_price)::int IS NULL or price_cents >= sqlc.narg(min_price))
+AND (sqlc.narg(max_price)::int IS NULL or price_cents <= sqlc.narg(max_price))
 LIMIT sqlc.arg(limit_products) OFFSET sqlc.arg(offset_products);
 
 -- name: GetProductsSortedByPriceAsc :many
 SELECT * FROM products
-WHERE (sqlc.narg(category_id) IS NULL or EXISTS (select 1 from product_categories where category_id = sqlc.narg(category_id) and product_id = products.id))
-AND (sqlc.narg(min_price) IS NULL or price_cents >= sqlc.narg(min_price))
-AND (sqlc.narg(max_price) IS NULL or price_cents <= sqlc.narg(max_price))
+WHERE (sqlc.narg(category_id)::int IS NULL or EXISTS (select 1 from product_categories where category_id = sqlc.narg(category_id) and product_id = products.id))
+AND (sqlc.narg(min_price)::int IS NULL or price_cents >= sqlc.narg(min_price))
+AND (sqlc.narg(max_price)::int IS NULL or price_cents <= sqlc.narg(max_price))
 ORDER BY price_cents ASC, id ASC
 LIMIT sqlc.arg(limit_products) OFFSET sqlc.arg(offset_products);
 
 -- name: GetProductsSortedByPriceDesc :many
 SELECT * FROM products
-WHERE (sqlc.narg(category_id) IS NULL or EXISTS (select 1 from product_categories where category_id = sqlc.narg(category_id) and product_id = products.id))
-AND (sqlc.narg(min_price) IS NULL or price_cents >= sqlc.narg(min_price))
-AND (sqlc.narg(max_price) IS NULL or price_cents <= sqlc.narg(max_price))
+WHERE (sqlc.narg(category_id)::int IS NULL or EXISTS (select 1 from product_categories where category_id = sqlc.narg(category_id) and product_id = products.id))
+AND (sqlc.narg(min_price)::int IS NULL or price_cents >= sqlc.narg(min_price))
+AND (sqlc.narg(max_price)::int IS NULL or price_cents <= sqlc.narg(max_price))
 ORDER BY price_cents DESC, id ASC
 LIMIT sqlc.arg(limit_products) OFFSET sqlc.arg(offset_products);
 
