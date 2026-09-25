@@ -8,7 +8,7 @@ LSOF_ARGS = $(foreach port,$(PORTS),-i:$(port))
 .PHONY: start-backends stop-backends clean test
 
 test:
-	go test -v ./...
+	go test -race -v ./...
 
 start-backends: clean
 	@for port in $(PORTS); do \
