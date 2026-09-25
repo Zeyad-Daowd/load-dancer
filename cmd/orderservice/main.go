@@ -68,8 +68,8 @@ func main() {
 	mux.HandleFunc("POST /orders/{orderID}/checkout", h.CheckoutOrder)
 	mux.HandleFunc("GET /orders/{orderID}", h.GetOrder)
 	mux.HandleFunc("GET /users/{userId}/orders", h.GetUserOrders)
-	mux.HandleFunc("POST /categories", h.AddCategory)                      //admin auth later
-	mux.HandleFunc("POST /products/{id}/categories", h.AddProductCategory) //admin auth later
+	mux.HandleFunc("POST /categories", h.AddCategory)                             //admin auth later
+	mux.HandleFunc("POST /products/{productID}/categories", h.AddProductCategory) //admin auth later
 	srv := &http.Server{
 		Addr:              parsedURL.Host,
 		Handler:           mux,
