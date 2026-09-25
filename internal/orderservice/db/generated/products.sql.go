@@ -51,10 +51,124 @@ func (q *Queries) GetProduct(ctx context.Context, id int32) (Product, error) {
 
 const getProducts = `-- name: GetProducts :many
 SELECT id, name, price_cents, description FROM products
+WHERE ($1 IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
+AND ($2 IS NULL or price_cents >= $2)
+AND ($3 IS NULL or price_cents <= $3)
+LIMIT $5 OFFSET $4
 `
 
-func (q *Queries) GetProducts(ctx context.Context) ([]Product, error) {
-	rows, err := q.db.Query(ctx, getProducts)
+type GetProductsParams struct {
+	CategoryID     interface{}
+	MinPrice       interface{}
+	MaxPrice       interface{}
+	OffsetProducts int32
+	LimitProducts  int32
+}
+
+func (q *Queries) GetProducts(ctx context.Context, arg GetProductsParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProducts,
+		arg.CategoryID,
+		arg.MinPrice,
+		arg.MaxPrice,
+		arg.OffsetProducts,
+		arg.LimitProducts,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PriceCents,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductsSortedByPriceAsc = `-- name: GetProductsSortedByPriceAsc :many
+SELECT id, name, price_cents, description FROM products
+WHERE ($1 IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
+AND ($2 IS NULL or price_cents >= $2)
+AND ($3 IS NULL or price_cents <= $3)
+ORDER BY price_cents ASC, id ASC
+LIMIT $5 OFFSET $4
+`
+
+type GetProductsSortedByPriceAscParams struct {
+	CategoryID     interface{}
+	MinPrice       interface{}
+	MaxPrice       interface{}
+	OffsetProducts int32
+	LimitProducts  int32
+}
+
+func (q *Queries) GetProductsSortedByPriceAsc(ctx context.Context, arg GetProductsSortedByPriceAscParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProductsSortedByPriceAsc,
+		arg.CategoryID,
+		arg.MinPrice,
+		arg.MaxPrice,
+		arg.OffsetProducts,
+		arg.LimitProducts,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PriceCents,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductsSortedByPriceDesc = `-- name: GetProductsSortedByPriceDesc :many
+SELECT id, name, price_cents, description FROM products
+WHERE ($1 IS NULL or EXISTS (select 1 from product_categories where category_id = $1 and product_id = products.id))
+AND ($2 IS NULL or price_cents >= $2)
+AND ($3 IS NULL or price_cents <= $3)
+ORDER BY price_cents DESC, id ASC
+LIMIT $5 OFFSET $4
+`
+
+type GetProductsSortedByPriceDescParams struct {
+	CategoryID     interface{}
+	MinPrice       interface{}
+	MaxPrice       interface{}
+	OffsetProducts int32
+	LimitProducts  int32
+}
+
+func (q *Queries) GetProductsSortedByPriceDesc(ctx context.Context, arg GetProductsSortedByPriceDescParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProductsSortedByPriceDesc,
+		arg.CategoryID,
+		arg.MinPrice,
+		arg.MaxPrice,
+		arg.OffsetProducts,
+		arg.LimitProducts,
+	)
 	if err != nil {
 		return nil, err
 	}

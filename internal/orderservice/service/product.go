@@ -99,8 +99,63 @@ type ProductItem struct {
 	Description string
 }
 
-func (s *OrderService) GetProducts(ctx context.Context) ([]ProductItem, error) {
-	res, err := s.queries.GetProducts(ctx)
+type GetProductsFilter struct {
+	CategoryID    *int32
+	MinPriceCents *int32
+	MaxPriceCents *int32
+	Sort          string
+	Page          int
+	Limit         int
+}
+
+var ErrInvalidSortValue = fmt.Errorf("invalid sort value")
+
+const (
+	SortPriceAsc  = "price_asc"
+	SortPriceDesc = "price_desc"
+)
+
+func (s *OrderService) GetProducts(ctx context.Context, filter GetProductsFilter) ([]ProductItem, error) {
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 10
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Sort != "" && filter.Sort != SortPriceAsc && filter.Sort != SortPriceDesc {
+		return nil, ErrInvalidSortValue
+	}
+	var res []db.Product
+	var err error
+	switch filter.Sort {
+	case SortPriceAsc:
+		res, err = s.queries.GetProductsSortedByPriceAsc(ctx, db.GetProductsSortedByPriceAscParams{
+			CategoryID:     filter.CategoryID,
+			MinPrice:       filter.MinPriceCents,
+			MaxPrice:       filter.MaxPriceCents,
+			LimitProducts:  int32(filter.Limit),
+			OffsetProducts: int32((filter.Page - 1) * filter.Limit),
+		})
+	case SortPriceDesc:
+		res, err = s.queries.GetProductsSortedByPriceDesc(ctx, db.GetProductsSortedByPriceDescParams{
+			CategoryID:     filter.CategoryID,
+			MinPrice:       filter.MinPriceCents,
+			MaxPrice:       filter.MaxPriceCents,
+			LimitProducts:  int32(filter.Limit),
+			OffsetProducts: int32((filter.Page - 1) * filter.Limit),
+		})
+	default:
+		res, err = s.queries.GetProducts(ctx, db.GetProductsParams{
+			CategoryID:     filter.CategoryID,
+			MinPrice:       filter.MinPriceCents,
+			MaxPrice:       filter.MaxPriceCents,
+			LimitProducts:  int32(filter.Limit),
+			OffsetProducts: int32((filter.Page - 1) * filter.Limit),
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
