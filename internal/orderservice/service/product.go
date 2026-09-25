@@ -140,13 +140,6 @@ func (s *OrderService) GetProducts(ctx context.Context, filter GetProductsFilter
 	}
 	var res []db.Product
 	var err error
-	fmt.Printf("constructed filter: %+v\n", db.GetProductsParams{
-		CategoryID:     nullableInt(filter.CategoryID),
-		MinPrice:       nullableInt(filter.MinPriceCents),
-		MaxPrice:       nullableInt(filter.MaxPriceCents),
-		LimitProducts:  int32(filter.Limit),
-		OffsetProducts: int32((filter.Page - 1) * filter.Limit),
-	})
 	switch filter.Sort {
 	case SortPriceAsc:
 		res, err = s.queries.GetProductsSortedByPriceAsc(ctx, db.GetProductsSortedByPriceAscParams{

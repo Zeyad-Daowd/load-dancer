@@ -21,10 +21,14 @@ import (
 	service "github.com/zeyad-daowd/load-dancer/internal/orderservice/service"
 )
 
-const LoadBalancerEnabled = false
+var LoadBalancerEnabled = false
+var LogInfo = false
 
 func main() {
+	loadBalancerFlag := flag.Bool("lb", false, "connect to load balancer")
 	flag.Parse()
+	LoadBalancerEnabled = *loadBalancerFlag
+	slog.Info("LoadBalancerEnabled: ", "value", LoadBalancerEnabled)
 	if flag.NArg() < 1 {
 		slog.Error("Please provide a backend URL as a command line argument.")
 		os.Exit(1)
@@ -53,6 +57,12 @@ func main() {
 	fmt.Println("Connected to database successfully")
 	// nil causes slog to log from INFO level and above
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	if !LogInfo {
+		slogHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelWarn,
+		})
+		logger = slog.New(slogHandler)
+	}
 	orderService := service.NewOrderService(queries, pool)
 	h := handler.NewOrderServiceHandler(logger, orderService, parsedURL.String())
 	mux := http.NewServeMux()

@@ -13,7 +13,7 @@ test:
 start-backends: clean
 	@for port in $(PORTS); do \
 		echo "Starting backend on port $$port..."; \
-		go run ./cmd/mockbackend/main.go http://localhost:$$port >> backend_$$port.log 2>&1 & \
+		go run ./cmd/orderservice/main.go -lb=true http://localhost:$$port >> backend_$$port.log 2>&1 & \
 	done
 	@echo "All mock backends started!"
 

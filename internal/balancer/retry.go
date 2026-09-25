@@ -20,8 +20,8 @@ var baseTransport = http.Transport{
 	}).DialContext,
 	ResponseHeaderTimeout: 5 * time.Second,
 	IdleConnTimeout:       10 * time.Second,
-	MaxIdleConns:          100,
-	MaxIdleConnsPerHost:   20,
+	MaxIdleConns:          500,
+	MaxIdleConnsPerHost:   500,
 }
 
 type RetryBalancerTransport struct {

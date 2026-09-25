@@ -16,7 +16,17 @@ import (
 	"github.com/zeyad-daowd/load-dancer/internal/middleware"
 )
 
+var LogInfo = false
+
 func main() {
+	if !LogInfo {
+		slogHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelWarn,
+		})
+		logger := slog.New(slogHandler)
+
+		slog.SetDefault(logger)
+	}
 	sigtermCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,7 +53,7 @@ func main() {
 	}()
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /", middleware.LoggingMiddleware(rr.Handler()))
+	mux.Handle("/", middleware.LoggingMiddleware(rr.Handler()))
 
 	srv := &http.Server{
 		Addr:              ":8080",
